@@ -1,0 +1,17 @@
+OLD! This was my sketch file for trying to design the protocol
+
+Control occurs over WebSockets
+There are 2 control types: Commands and Options:
+Commands are essentially an RPC call for specific action, usually a movement.
+Settings are a key-value store for various purposes, such as automatic sensor update frequency
+
+Message types:
+"log": put something in the driver's console: {"status", "message"}
+"error": directly communicate an error with the peer, outside of errors that occur in commands (?)
+"command": commands that control the rover: {"id", "command", "parameters"}
+"command_base": commands that control the base station (?)
+"command_response": a response packet from a command- its "return value", or its error: {"id", "status", "contents"}
+"digest": an automated sensor digest from the rover: {"sensors"}
+"option": modifies/queries the options database: {"get"?, "set"?}
+"option_response": response from modifying/querying the options db (returns values requested {"values"}
+"auth": Handles authentication (?)
