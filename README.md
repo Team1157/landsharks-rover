@@ -57,10 +57,10 @@ Response: None
 ```
 ### `"cancel_commands"`: Cancels all commands in the queue
 Driver -> Base  
-Response: `"queue_status"`
+Response: `"clear_queue"`
 ```js
 {
-    "type": "cancel_commands"
+    "type": "clear_queue"
 }
 ```
 ### `"queue_status"`: Returns all commands in the queue
@@ -113,12 +113,20 @@ Response: None
     }
 }
 ```
-### `"e-stop"`: Stops all commands and clears queue
+### `"error"`: Reports error in protocol
+Driver <-> Base, Base <-> Rover
+Response: None
+```js
+{
+    "type": "error",
+}
+```
+### `"e_stop"`: Stops all commands and clears queue
 Driver -> Base, Base -> Rover
 Response: `status`
 ```js
 {
-    "type": "e-stop",
+    "type": "e_stop",
 }
 ```
 Todo: `"auth"`
