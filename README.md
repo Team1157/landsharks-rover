@@ -4,6 +4,8 @@ This repository contains the control code for the rover and the base station.
 The control protocol is a simple WebSockets message-based protocol. Messages are
 encoded in JSON and all contain a `"type"` key, which is one of the following values:
 ### `"log"`: Shows info
+Rover -> Base, Base -> Driver  
+Response: None
 ```js
 {
     "type": "log",
@@ -12,6 +14,8 @@ encoded in JSON and all contain a `"type"` key, which is one of the following va
 }
 ```
 ### `"command"`: Runs a command
+Driver -> Base, Base -> Rover  
+Response: `"command_response"` or `"error"`
 ```js
 {
     "type": "command",
@@ -23,6 +27,8 @@ encoded in JSON and all contain a `"type"` key, which is one of the following va
 }
 ```
 ### `"command_response"`: Returns command status and data
+Rover -> Base, Base -> Driver  
+Response: None
 ```js
 {
     "type": "command_response",
@@ -31,7 +37,47 @@ encoded in JSON and all contain a `"type"` key, which is one of the following va
     "contents: {} // Any other info from the command
 }
 ```
+### `"status_query"`: Gets the current command
+Rover -> Base  
+Response: `"status"`
+```js
+{
+  "type": "status_query",
+}
+```
+### `"status"`: Returns command status and data
+Rover -> Base  
+Response: None
+```js
+{
+  "type": "status",
+  "status": "busy", // Whether the rover is running a command
+  "current_command": some id
+}
+```
+### `"cancel_commands"`: Cancels all commands in the queue
+Driver -> Base  
+Response: `"queue_status"`
+```js
+{
+    "type": "cancel_commands"
+}
+```
+### `"queue_status"`: Returns all commands in the queue
+Base -> Driver  
+Response: None
+```js
+{
+    "type": "queue_status",
+    "commands": [ // The ids of the commands in the queue
+        17574336,
+        63347571
+    ]
+}
+```
 ### `"option"`: Sets or gets options
+Driver -> Base, Base -> Rover  
+Response: `"option_response"`
 ```js
 {
     "type": "option",
@@ -44,6 +90,8 @@ encoded in JSON and all contain a `"type"` key, which is one of the following va
 }
 ```
 ### `"option_response"`: Returns option values
+Rover -> Base, Base -> Driver  
+Response: None
 ```js
 {
     "type": "option_response",
@@ -54,6 +102,8 @@ encoded in JSON and all contain a `"type"` key, which is one of the following va
 }
 ```
 ### `"digest"`: Reports sensor values
+Rover -> Base, Base -> Driver
+Response: None
 ```js
 {
     "type": "digest",
@@ -63,4 +113,12 @@ encoded in JSON and all contain a `"type"` key, which is one of the following va
     }
 }
 ```
-Todo: `"auth"`, `"command_base"`, and `"error"` (if we're keeping it)
+### `"e-stop"`: Stops all commands and clears queue
+Driver -> Base, Base -> Rover
+Response: `status`
+```js
+{
+    "type": "e-stop",
+}
+```
+Todo: `"auth"`
