@@ -2,6 +2,16 @@
 Common components used in both rover and server
 """
 import json
+from enum import Enum
+
+
+class Error(Enum):
+    """
+    An enum of the possible errors that can be sent by the rover and base station
+    """
+
+    json_parse_error = "json_parse_error"
+    command_invalid_parameters = "command_invalid_parameters"
 
 
 class Msg:
@@ -19,10 +29,10 @@ class Msg:
         })
 
     @staticmethod
-    def error(err: str, message: str):
+    def error(err: Error, message: str):
         return json.dumps({
             "type": "error",
-            "error": err,
+            "error": err.value,
             "message": message
         })
 
@@ -35,10 +45,10 @@ class Msg:
         })
 
     @staticmethod
-    def response(status, contents: dict = None, id_: int = None):
+    def command_response(error: Error = None, contents: dict = {}, id_: int = None):
         return json.dumps({
-            "type": "response",
-            "status": status,
+            "type": "command_response",
+            "error": (error.value if error is not None else None),
             "contents": contents,
             "id": id_
         })

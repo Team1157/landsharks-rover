@@ -1,9 +1,10 @@
 import asyncio
 import json
+import time
 import typing as t
 import inspect
 import websockets
-from common import Msg
+from common import Msg, Error
 
 
 class LandsharksRover:
@@ -18,9 +19,17 @@ class LandsharksRover:
 
     async def main(self):
         # Open the socket connection
-        await self.open_ws()
+        while True:
+            try:
+                await self.open_ws()
+                break
+            except ConnectionRefusedError as e:
+                print(e)
+            time.sleep(5)
+        print("Connected to team1157.org")
 
     async def open_ws(self):
+        print("Attempting to connect to websockets...")
         self.sck = await websockets.connect("ws://team1157.org:11571/rover", ping_interval=5, ping_timeout=10)
         await self.sck.send(json.dumps({
             "type": "special"
@@ -30,12 +39,20 @@ class LandsharksRover:
         while True:
             # Monitor the connection until it gets closed, then reopen it
             await self.sck.wait_closed()
+            print("Connection closed. Restarting...")
             await self.open_ws()
 
     async def handle_ws(self):
         try:
             async for msg_raw in self.sck:
-                msg = json.loads(msg_raw)  # Fetch next message
+                try:
+                    msg = json.loads(msg_raw)  # Fetch next message
+                except json.JSONDecodeError:
+                    await self.sck.send(Msg.command_response(
+                        Error.json_parse_error,
+                    ))
+                    continue
+
                 if msg["type"] == "command":
                     cmd = msg["command"]
                     params = msg["parameters"]
@@ -46,13 +63,10 @@ class LandsharksRover:
                     # and that all required params are provided
                     if not all(x in sig.parameters.keys() for x in params.keys())\
                             or not all(x in params.keys() for x in required_params):
-                        await self.sck.send({
-                            "id": msg["id"],
-                            "status": "error",
-                            "error": "command_invalid_parameters",
-                            "message": "The parameters provided for the command were invalid."
-                        })
-                        await self.sck.send(Msg.response("error", ))
+                        await self.sck.send(Msg.command_response(
+                            Error.command_invalid_parameters,
+                            id_=msg["id"]
+                        ))
                         continue
                     # todo?: maybe check types of params
                     asyncio.create_task(fn(**params))
