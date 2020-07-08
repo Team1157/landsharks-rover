@@ -11,6 +11,7 @@ class RoverBaseStation:
         self.rovers: t.Set[websockets.WebSocketServerProtocol] = set()
 
         self.command_ids: t.Dict[int, websockets.WebSocketServerProtocol] = {}
+        self.command_queue: asyncio.Queue
 
     async def broadcast(self, message: str):
         """
@@ -79,7 +80,7 @@ class RoverBaseStation:
             self.drivers.remove(sck)
             await self.log(f"Rover disconnected: {sck.remote_address}")
         else:
-            await self.log(f"Client disconnected which was never connected: {sck.remote_address}", "warning")
+            await self.log(f"Client disconnected which was never registered: {sck.remote_address}", "warning")
 
     async def serve(self, sck: websockets.WebSocketServerProtocol, path: str):
         await self.register_client(sck, path)
@@ -90,6 +91,7 @@ class RoverBaseStation:
                     msg = json.loads(msg_raw)
                     if not Msg.verify(msg):
                         await sck.send(Msg.error("invalid_message", "The message sent is invalid"))
+                        await self.log(f"Received invalid message from {sck.remote_address}", "error")
 
                     if sck in self.drivers:
                         if msg["type"] == "command":
@@ -111,8 +113,8 @@ class RoverBaseStation:
                     elif sck in self.rovers:
                         if msg["type"] == "response":
                             # Route response to correct driver
-                            if not msg["id"] in self.command_ids:
-                                await sck.send(Msg.error("unknown_id", "The given command ID is not valid"))
+                            if msg["id"] not in self.command_ids:
+                                await sck.send(Msg.error("unknown_id", "The given response ID is not valid"))
                                 continue
                             await self.command_ids[msg["id"]].send(json.dumps(msg))
                             # Log (debug)
@@ -121,7 +123,7 @@ class RoverBaseStation:
                                 f"{self.command_ids[msg['id']].remote_address}"
                             )
                             # Free up command id
-                            # May cause issues if more than 1 rover is connected, not really an issue
+                            # May cause issues if more than 1 rover is connected, which shouldn't ever be the case
                             del self.command_ids[msg["id"]]
 
                     else:

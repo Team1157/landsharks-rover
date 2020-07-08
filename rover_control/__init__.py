@@ -7,18 +7,23 @@ from common import Msg
 
 
 class LandsharksRover:
-    commands = {}
+    commands: t.Dict[str, t.Callable[[...], t.Coroutine]] = {}
 
     @classmethod
-    def register_command(cls, fn: t.Callable[..., dict]):
+    def register_command(cls, fn: t.Callable[[...], t.Coroutine]):
         cls.commands[fn.__name__] = fn
 
     def __init__(self):
-        self.sck: websockets.WebSocketClientProtocol = None
+        self.sck: t.Optional[websockets.WebSocketClientProtocol] = None
+        self.current_command: t.Optional[asyncio.Task] = None
 
     async def main(self):
         # Open the socket connection
         await self.open_ws()
+        await asyncio.gather(
+            self.handle_ws(),  # Handles websocket messages
+            self.maintain_ws()  # Keeps the socket open
+        )
 
     async def open_ws(self):
         self.sck = await websockets.connect("ws://team1157.org:11571/rover", ping_interval=5, ping_timeout=10)
@@ -52,20 +57,32 @@ class LandsharksRover:
                             "error": "command_invalid_parameters",
                             "message": "The parameters provided for the command were invalid."
                         })
-                        await self.sck.send(Msg.response("error", ))
+                        await self.sck.send(Msg.command_response("error", ))
                         continue
                     # todo?: maybe check types of params
-                    asyncio.create_task(fn(**params))
+                    # Cancel current command if there is one
+                    if self.current_command is not None:
+                        self.current_command.cancel()
+                    # Run command
+                    self.current_command = asyncio.create_task(self.command_wrapper(fn(**params)))
                 elif msg["type"] == "":
                     pass
         finally:
             pass
 
+    async def command_wrapper(self, coro: t.Coroutine):
+        # Wait for coroutine to finish
+        res = await coro
+        # Send command response
+        await self.sck.send(Msg.command_response(
+            "ok"
+        ))
+
 
 # TODO: Split the command definitions off into a separate file somehow
 @LandsharksRover.register_command
 async def ping(*, data: str = ""):
-    return {"message": "pong", "data": data}
+    return {"message": "pong", "data": data}  # This gets fed into
 
 
 @LandsharksRover.register_command
@@ -145,27 +162,6 @@ async def camera_begin_stream():
 async def camera_end_stream():
     """
     Ends the current livestream if it is running
-    :return:
-    """
-    pass
-
-
-@LandsharksRover.register_command
-async def option_set(*, option: str, value=None):
-    """
-    Sets an option.
-    :param option: The option to set, or "*" for all (only for reset)
-    :param value: The value to set the option to, or None to reset to default
-    :return:
-    """
-    pass
-
-
-@LandsharksRover.register_command
-async def option_get(*, option: str):
-    """
-    Gets the value of an option
-    :param option: The option to get
     :return:
     """
     pass
