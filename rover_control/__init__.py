@@ -22,11 +22,13 @@ class LandsharksRover:
         while True:
             try:
                 await self.open_ws()
-                break
+                print("Successfully connected to team1157.org")
+                await self.handle_ws()
             except ConnectionRefusedError as e:
                 print(e)
-            asyncio.sleep(5)
-        print("Connected to team1157.org")
+            except websockets.ConnectionClosed:
+                print("Disconnected")
+            await asyncio.sleep(5)  # Attempt to reconnect after 5 seconds
 
     async def open_ws(self):
         print("Attempting to connect to websockets...")
@@ -35,21 +37,14 @@ class LandsharksRover:
             "type": "special"
         }))
 
-    async def maintain_ws(self):
-        while True:
-            # Monitor the connection until it gets closed, then reopen it
-            await self.sck.wait_closed()
-            print("Connection closed. Restarting...")
-            await self.open_ws()
-
     async def handle_ws(self):
         try:
             async for msg_raw in self.sck:
                 try:
                     msg = json.loads(msg_raw)  # Fetch next message
                 except json.JSONDecodeError:
-                    await self.sck.send(Msg.command_response(
-                        Error.json_parse_error,
+                    await self.sck.send(Msg.command_response(  # should this be Msg.error since it's assoc. with a cmd?
+                        error=Error.json_parse_error
                     ))
                     continue
 
@@ -64,7 +59,7 @@ class LandsharksRover:
                     if not all(x in sig.parameters.keys() for x in params.keys())\
                             or not all(x in params.keys() for x in required_params):
                         await self.sck.send(Msg.command_response(
-                            Error.command_invalid_parameters,
+                            error=Error.command_invalid_parameters,
                             id_=msg["id"]
                         ))
                         continue
@@ -73,18 +68,19 @@ class LandsharksRover:
                     if self.current_command is not None:
                         self.current_command.cancel()
                     # Run command
-                    self.current_command = asyncio.create_task(self.command_wrapper(fn(**params)))
+                    self.current_command = asyncio.create_task(self.command_wrapper(fn(**params), msg["id"]))
                 elif msg["type"] == "":
                     pass
         finally:
             pass
 
-    async def command_wrapper(self, coro: t.Coroutine):
+    async def command_wrapper(self, coro: t.Coroutine, return_id: int):
         # Wait for coroutine to finish
         res = await coro
         # Send command response
         await self.sck.send(Msg.command_response(
-            "ok"
+            contents=res,
+            id_=return_id
         ))
 
 
