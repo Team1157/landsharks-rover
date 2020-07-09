@@ -2,7 +2,7 @@ import asyncio
 import json
 import websockets
 import typing as t
-from common import Msg
+from common import Msg, Error
 
 
 class RoverBaseStation:
@@ -90,14 +90,14 @@ class RoverBaseStation:
                 try:
                     msg = json.loads(msg_raw)
                     if not Msg.verify(msg):
-                        await sck.send(Msg.error("invalid_message", "The message sent is invalid"))
+                        await sck.send(Msg.error(Error.invalid_message, "The message sent is invalid"))
                         await self.log(f"Received invalid message from {sck.remote_address}", "error")
 
                     if sck in self.drivers:
                         if msg["type"] == "command":
                             # Store command id to route response later
                             if msg["id"] in self.command_ids:
-                                await sck.send(Msg.error("id_in_use", "The given command ID is already in use"))
+                                await sck.send(Msg.error(Error.id_in_use, "The given command ID is already in use"))
                                 continue
                             self.command_ids[msg["id"]] = sck
                             # Forward command to rover
@@ -111,10 +111,10 @@ class RoverBaseStation:
                             pass
 
                     elif sck in self.rovers:
-                        if msg["type"] == "response":
+                        if msg["type"] == "command_response":
                             # Route response to correct driver
                             if msg["id"] not in self.command_ids:
-                                await sck.send(Msg.error("unknown_id", "The given response ID is not valid"))
+                                await sck.send(Msg.error(Error.unknown_id, "The given command ID is not valid"))
                                 continue
                             await self.command_ids[msg["id"]].send(json.dumps(msg))
                             # Log (debug)
@@ -130,7 +130,7 @@ class RoverBaseStation:
                         await sck.close(1011, "Client was never registered")
 
                 except json.JSONDecodeError:
-                    await sck.close(1002, "Message frame contained malformed JSON")
+                    await sck.send(Msg.error(Error.json_parse_error, "Failed to parse the message"))
                     await self.log(f"Received message with malformed JSON from {sck.remote_address}", "error")
 
         finally:

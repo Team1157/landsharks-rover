@@ -13,6 +13,8 @@ class Error(Enum):
     json_parse_error = "json_parse_error"
     command_invalid_parameters = "command_invalid_parameters"
     invalid_message = "invalid_message"
+    id_in_use = "id_in_use"
+    unknown_id = "unknown_id"
 
 
 def _chk_types(msg: dict, checklist: dict) -> bool:

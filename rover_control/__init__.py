@@ -25,6 +25,8 @@ class LandsharksRover:
                 await self.handle_ws()
             except websockets.ConnectionClosed:
                 print("Disconnected")
+                self.current_command.cancel()
+                # Todo: stop all motors
 
     async def open_ws(self):
         print("Attempting to (re)connect to websockets...")
@@ -68,10 +70,10 @@ class LandsharksRover:
                         self.current_command.cancel()
                     # Run command
                     self.current_command = asyncio.create_task(self.command_wrapper(fn(**params), msg["id"]))
-                elif msg["type"] == "":
-                    pass
-        finally:
-            pass
+                else:
+                    await self.sck.send(Msg.error(Error.invalid_message, "The message type is invalid"))
+        except Exception as e:
+            await self.sck.send(Msg.error(Error.invalid_message, "Error in message handling: " + str(e)))
 
     async def command_wrapper(self, coro: t.Coroutine, return_id: int):
         # Wait for coroutine to finish
