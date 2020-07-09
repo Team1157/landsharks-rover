@@ -33,7 +33,7 @@ Response: None
 {
     "type": "command_response",
     "id": 17574336, // The ID of the command that's being responded to
-    "status": "ok", // Whether or not the command was successful
+    "error": null //A string representing an error or null
     "contents: {} // Any other info from the command
 }
 ```

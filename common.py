@@ -1,7 +1,17 @@
 """
-Common components used in both rover and server
+Common components used in both rover and base station
 """
 import json
+from enum import Enum
+
+
+class Error(Enum):
+    """
+    An enum of the possible errors that can be sent by the rover and base station
+    """
+
+    json_parse_error = "json_parse_error"
+    command_invalid_parameters = "command_invalid_parameters"
 
 
 def _chk_types(msg: dict, checklist: dict) -> bool:
@@ -38,10 +48,10 @@ class Msg:
         })
 
     @staticmethod
-    def error(err: str, message: str) -> str:
+    def error(err: Error, message: str) -> str:
         return json.dumps({
             "type": "error",
-            "error": err,
+            "error": err.value,
             "message": message
         })
 
@@ -54,12 +64,12 @@ class Msg:
         })
 
     @staticmethod
-    def command_response(status: str, contents: dict = None, id_: int = None) -> str:
+    def command_response(contents: dict = {}, error: Error = None, id_: int = None):
         return json.dumps({
             "type": "command_response",
             "id": id_,
-            "status": status,
-            "contents": contents
+            "contents": contents,
+            "error": (error.value if error is not None else None)
         })
 
     # Other utils
