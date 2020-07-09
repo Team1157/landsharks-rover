@@ -93,3 +93,4 @@ class Msg:
             "contents": dict
         }):
             return False
+        return True

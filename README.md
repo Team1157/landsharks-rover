@@ -37,14 +37,6 @@ Response: None
     "contents: {} // Any other info from the command
 }
 ```
-### `"status_query"`: Gets the current command
-Rover -> Base  
-Response: `"status"`
-```js
-{
-  "type": "status_query",
-}
-```
 ### `"status"`: Returns command status and data
 Rover -> Base  
 Response: None
@@ -52,7 +44,7 @@ Response: None
 {
   "type": "status",
   "status": "busy", // Whether the rover is running a command
-  "current_command": some id
+  "current_command": 12345678 //The current command id or null
 }
 ```
 ### `"cancel_commands"`: Cancels all commands in the queue
@@ -129,4 +121,10 @@ Response: `status`
     "type": "e_stop",
 }
 ```
+###Periodic messages 
+These messages are sent automatically with a frequency usually configurable with the options message
+* `"status"` (Rover -> Base)
+* `"digest"` (Rover -> Baser)
+* `"queue_status"` (Base -> Driver)
+  
 Todo: `"auth"`

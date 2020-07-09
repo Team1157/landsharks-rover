@@ -134,13 +134,16 @@ class RoverBaseStation:
                                 f"{sck.remote_address} sent command {msg['command']} (#{msg['id']}) "
                                 f"with parameters {msg['parameters']}"
                             )
-                        if msg["type"] == "option":
+                        elif msg["type"] == "option":
                             pass
 
                     elif sck in self.rovers:
-                        if msg["type"] == "command_response":
+                        if msg["type"] == "log":
+                            await self.log("Rover: " + msg["message"], msg["level"])
+                        elif msg["type"] == "command_response":
                             # Route response to correct driver
                             if msg["id"] not in self.command_ids:
+                                await self.log("Command recieved from rover with invalid id", "error")
                                 await sck.send(Msg.error(Error.unknown_id, "The given command ID is not valid"))
                                 continue
                             await self.command_ids[msg["id"]].send(json.dumps(msg))
@@ -159,6 +162,8 @@ class RoverBaseStation:
                 except json.JSONDecodeError:
                     await sck.send(Msg.error(Error.json_parse_error, "Failed to parse the message"))
                     await self.log(f"Received message with malformed JSON from {sck.remote_address}", "error")
-
+        except Exception as e:
+            await self.log(str(e), "error")
+            raise e
         finally:
             await self.unregister_client(sck)
