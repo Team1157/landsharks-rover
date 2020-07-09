@@ -2,6 +2,8 @@ import asyncio
 import json
 import websockets
 import typing as t
+import logging
+import datetime
 from common import Msg, Error
 
 
@@ -12,6 +14,12 @@ class RoverBaseStation:
 
         self.command_ids: t.Dict[int, websockets.WebSocketServerProtocol] = {}
         self.command_queue: asyncio.Queue
+
+        self.logger = logging.getLogger("base_station")
+        self.log_path = log_file = "logs/" + datetime.date.today().isoformat() + ".log"
+        logging.basicConfig(filename=log_file, level=logging.DEBUG,
+                            format='%(asctime)s [%(levelname)s] [%(name)s: %(module)s.%(funcName)s] %(message)s')
+        self.logger.warning("hello!")
 
     async def broadcast(self, message: str):
         """
@@ -44,6 +52,25 @@ class RoverBaseStation:
         :param level: The loglevel to indicate (debug, info, warning, error, critical)
         :return:
         """
+
+        new_log_file = "logs/" + datetime.date.today().isoformat() + ".log"
+        if self.log_path != new_log_file:
+            self.log_path = new_log_file
+            logging.basicConfig(filename=new_log_file)
+
+        if level == "debug":
+            self.logger.debug(message)
+        elif level == "info":
+            self.logger.info(message)
+        elif level == "warning":
+            self.logger.warning(message)
+        elif level == "error":
+            self.logger.error(message)
+        elif level == "critical":
+            self.logger.critical(message)
+        else:
+            self.logger.warning("Invalid logging level: " + level)
+            self.logger.warning(message)
         await self.broadcast_drivers(Msg.log(message, level))
 
     async def register_client(self, sck: websockets.WebSocketServerProtocol, path: str):

@@ -39,7 +39,7 @@ class LandsharksRover:
 
     async def handle_ws(self):
         try:
-            async for msg_raw in self.sck:  # Continously receive messages
+            async for msg_raw in self.sck:  # Continuously receive messages
                 try:
                     msg = json.loads(msg_raw)
                 except json.JSONDecodeError:
