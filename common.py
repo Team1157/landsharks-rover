@@ -12,6 +12,7 @@ class Error(Enum):
 
     json_parse_error = "json_parse_error"
     command_invalid_parameters = "command_invalid_parameters"
+    invalid_message = "invalid_message"
 
 
 def _chk_types(msg: dict, checklist: dict) -> bool:

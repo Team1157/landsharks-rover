@@ -18,34 +18,33 @@ class LandsharksRover:
         self.current_command: t.Optional[asyncio.Task] = None
 
     async def main(self):
-        # Open the socket connection
         while True:
             try:
                 await self.open_ws()
-                print("Successfully connected to team1157.org")
+                print("Successfully connected")
                 await self.handle_ws()
-            except ConnectionRefusedError as e:
-                print(e)
             except websockets.ConnectionClosed:
                 print("Disconnected")
-            await asyncio.sleep(5)  # Attempt to reconnect after 5 seconds
 
     async def open_ws(self):
-        print("Attempting to connect to websockets...")
-        self.sck = await websockets.connect("ws://team1157.org:11571/rover", ping_interval=5, ping_timeout=10)
-        await self.sck.send(json.dumps({
-            "type": "special"
-        }))
+        print("Attempting to (re)connect to websockets...")
+        while True:
+            try:
+                self.sck = await websockets.connect("ws://team1157.org:11571/rover", ping_interval=5, ping_timeout=10)
+            except ConnectionRefusedError:
+                print("Failed to connect, retrying in 5 seconds...")
+            await asyncio.sleep(5)  # Attempt to reconnect after 5 seconds
 
     async def handle_ws(self):
         try:
-            async for msg_raw in self.sck:
+            async for msg_raw in self.sck:  # Continously receive messages
                 try:
-                    msg = json.loads(msg_raw)  # Fetch next message
+                    msg = json.loads(msg_raw)
                 except json.JSONDecodeError:
-                    await self.sck.send(Msg.command_response(  # should this be Msg.error since it's assoc. with a cmd?
-                        error=Error.json_parse_error
-                    ))
+                    await self.sck.send(Msg.error(Error.json_parse_error, "Received malformed JSON"))
+                    continue
+                if not Msg.verify(msg):
+                    await self.sck.send(Msg.error(Error.invalid_message, "The provided message is invalid"))
                     continue
 
                 if msg["type"] == "command":
