@@ -1,10 +1,11 @@
 import asyncio
+import csv
 import json
+import os
 import websockets
 import typing as t
 import logging, logging.handlers
 import datetime
-import os
 from common import Msg, Error
 
 # Numeric logging levels as defined by `logging`
@@ -19,13 +20,31 @@ LOG_LEVELS = {
 }
 
 
+def flatten_dict(tree: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    """
+    Takes a multi-level dictionary and flattens it into one layer, with keys representing the path to the value in the
+    original dictionary
+    :param tree: The dictionary to flatten
+    :return: The flattened dictionary
+    """
+    out = {}
+    for key, value in tree.items():
+        if type(value) == dict:
+            for k, v in flatten_dict(value).items():
+                out[f"{key}.{k}"] = v
+        else:
+            out[key] = value
+    return out
+
+
 class RoverBaseStation:
     def __init__(self):
         self.drivers: t.Set[websockets.WebSocketServerProtocol] = set()
         self.rovers: t.Set[websockets.WebSocketServerProtocol] = set()
 
         self.command_ids: t.Dict[int, websockets.WebSocketServerProtocol] = {}
-        self.command_queue: asyncio.Queue
+        self.command_queue: t.List[t.Dict[str, t.Any]] = []
+        self.current_command: t.Optional[t.Dict[str, t.Any]] = None
 
         # #  LOGGING CONFIGURATION  # #
         # Create logger
@@ -92,7 +111,7 @@ class RoverBaseStation:
 
     async def log(self, message: str, level="info"):
         """
-        Broadcasts a log message to the connected Drivers
+        Broadcasts a log message to the connected Drivers and writes to local log
         :param message: The message to send
         :param level: The loglevel or "severity" to indicate (debug, info, warning, error, critical)
         :return:
@@ -100,7 +119,7 @@ class RoverBaseStation:
         if level.lower() in LOG_LEVELS:
             self.logger.log(LOG_LEVELS[level], message)
         else:
-            self.logger.warning("Invalid logging level: " + level)
+            self.logger.warning(f"Invalid logging level: {level}")
             self.logger.warning(message)
         await self.broadcast_drivers(Msg.log(message, level))
 
@@ -142,6 +161,10 @@ class RoverBaseStation:
     async def serve(self, sck: websockets.WebSocketServerProtocol, path: str):
         await self.register_client(sck, path)
 
+        data_path: str = os.path.join("base_station", "sensor_data", f"{datetime.date.today().isoformat()}.csv")
+        need_header: bool = not os.path.exists(data_path)
+        data_file: t.TextIO = open(data_path, "a", newline='')
+        data_writer: t.Optional[csv.DictWriter] = None
         try:
             async for msg_raw in sck:  # Continually receive messages
                 # Decode and verify message
@@ -163,40 +186,99 @@ class RoverBaseStation:
                             await sck.send(Msg.error(Error.id_in_use, "The given command ID is already in use"))
                             continue
                         self.command_ids[msg["id"]] = sck
-                        # Forward command to rover
-                        await self.broadcast_rovers(json.dumps(msg))
+                        # Put the command in the command queue
+                        self.command_queue.append(msg)
                         # Log command
                         await self.log(
-                            f"{sck.remote_address[0]} sent command {msg['command']} (#{msg['id']}) "
-                            f"with parameters {msg['parameters']}"
+                            f"{sck.remote_address} sent command {msg['command']} (#{msg['id']}) "
+                            f"with parameters {msg['parameters']} (#{len(self.command_queue)} in queue)"
                         )
+                    elif msg["type"] == "clear_queue":
+                        while len(self.command_queue) > 0:
+                            # Free up the ids of the removed commands
+                            cmd = self.command_queue.pop(0)
+                            del self.command_ids[cmd["id"]]
+                        await self.log(f"Queue cleared by {sck.remote_address[0]}")
+                        await self.broadcast_drivers(Msg.queue_status(self.current_command, self.command_queue))
                     elif msg["type"] == "option":
-                        pass
+                        self.logger.info(f"{sck.remote_address[0]} getting options {msg['get']!r}, Setting options {msg['set']!r}")
+                        await self.broadcast_rovers(msg)
                     elif msg["type"] == "log":
                         # Route log to drivers
                         await self.log(f"Driver {sck.remote_address[0]} logged: {msg['message']}", msg["level"])
+                    else:
+                        await self.log(f"Received message with an unknown type from {sck.remote_address[0]}", "error")
+                        await sck.send(Msg.error(Error.invalid_message, "Unknown message type"))
 
                 elif sck in self.rovers:
                     if msg["type"] == "command_response":
                         # Route response to correct driver
                         if msg["id"] not in self.command_ids:
+                            await self.log(f"Command response received from rover {sck.remote_address[0]} "
+                                           f"with invalid id", "error")
                             await sck.send(Msg.error(Error.unknown_id, "The given command ID is not valid"))
                             continue
                         await self.command_ids[msg["id"]].send(json.dumps(msg))
                         # Log (debug)
                         await self.log(
                             f"{sck.remote_address[0]} sent response (#{msg['id']}) to "
-                            f"{self.command_ids[msg['id']].remote_address[0]}"
+                            f"{self.command_ids[msg['id']].remote_address}"
                         )
                         # Free up command id
                         # May cause issues if more than 1 rover is connected, which shouldn't ever be the case
+                        if self.current_command is None or msg["id"] != self.current_command["id"]:
+                            await self.log(f"Command response received from {sck.remote_address[0]} "
+                                           f"that does not match the running command",
+                                           "warning")
                         del self.command_ids[msg["id"]]
+                        self.current_command = None
+                    elif msg["type"] == "status":
+                        status = msg["status"]
+                        if status == "busy":
+                            pass
+                        elif status == "idle":
+                            if not len(self.command_queue) == 0:
+                                next_command = self.command_queue.pop(0)
+                                await self.broadcast_rovers(json.dumps(next_command))
+                                await self.log(f"Sent command '{next_command['command']}' "
+                                               f"with parameters {next_command['parameters']!r}")
+                                self.current_command = next_command
+                        else:
+                            await self.log(f"Status message received from {sck.remote_address[0]} with an unknown "
+                                           f"status: {status}", "error")
+                    elif msg["type"] == "option_response":
+                        await self.log(f"Option response from {sck.remote_address[0]}: {msg['values']!r}")
+                        await self.broadcast_drivers(msg)
+                    elif msg["type"] == "digest":
+                        flattened_data = flatten_dict(msg)
+                        new_path = os.path.join("base_station", "sensor_data",
+                                                f"{datetime.date.today().isoformat()}.csv")
+                        if data_path != new_path:
+                            # Switch data files
+                            data_file.close()
+                            data_path = new_path
+                            data_file = open(data_path, "w", newline='')
+                            need_header = True
+                            data_writer = None
+                        if data_writer is None:
+                            data_writer = csv.DictWriter(data_file, fieldnames=flattened_data.keys())
+                            if need_header:
+                                data_writer.writeheader()
+                                need_header = False
+                        data_writer.writerow(flattened_data)
+                        await self.broadcast_drivers(msg)
                     elif msg["type"] == "log":
                         # Route log to drivers
                         await self.log(f"Rover {sck.remote_address[0]} logged: {msg['message']}", msg["level"])
+                    else:
+                        await sck.send(Msg.error(Error.invalid_message, "Unknown message type"))
 
                 else:
                     await sck.close(1011, "Client was never registered")
-
+        except Exception as e:
+            # Send exception to drivers
+            await self.log(str(e), "critical")
+            raise e
         finally:
+            data_file.close()
             await self.unregister_client(sck)

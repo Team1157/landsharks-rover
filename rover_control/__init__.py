@@ -16,6 +16,7 @@ class LandsharksRover:
     def __init__(self):
         self.sck: t.Optional[websockets.WebSocketClientProtocol] = None
         self.current_command: t.Optional[asyncio.Task] = None
+        self.current_command_id: t.Optional[int] = None
 
     async def main(self):
         while True:
@@ -50,6 +51,9 @@ class LandsharksRover:
                     continue
 
                 if msg["type"] == "command":
+                    if self.current_command_id is not None and self.current_command_id == msg["id"]:
+                        # Command is already running
+                        continue
                     cmd = msg["command"]
                     params = msg["parameters"]
                     fn = self.commands[cmd]
@@ -76,6 +80,7 @@ class LandsharksRover:
             await self.sck.send(Msg.error(Error.invalid_message, "Error in message handling: " + str(e)))
 
     async def command_wrapper(self, coro: t.Coroutine, return_id: int):
+        self.current_command_id = id
         # Wait for coroutine to finish
         res = await coro
         # Send command response
@@ -83,6 +88,7 @@ class LandsharksRover:
             contents=res,
             id_=return_id
         ))
+        self.current_command_id = None
 
 
 # TODO: Split the command definitions off into a separate file somehow

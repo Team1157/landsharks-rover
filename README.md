@@ -6,7 +6,7 @@ encoded in JSON and all contain a `"type"` key, which is one of the following va
 ### `"log"`: Shows info
 Rover -> Base, Base -> Driver  
 Response: None
-```js
+```json
 {
     "type": "log",
     "message": "Some message", // Human-readable message to display to the driver
@@ -16,7 +16,7 @@ Response: None
 ### `"command"`: Runs a command
 Driver -> Base, Base -> Rover  
 Response: `"command_response"` or `"error"`
-```js
+```json
 {
     "type": "command",
     "id": 17574336, // A unique ID used to match commands with responses
@@ -29,7 +29,7 @@ Response: `"command_response"` or `"error"`
 ### `"command_response"`: Returns command status and data
 Rover -> Base, Base -> Driver  
 Response: None
-```js
+```json
 {
     "type": "command_response",
     "id": 17574336, // The ID of the command that's being responded to
@@ -40,17 +40,17 @@ Response: None
 ### `"status"`: Returns command status and data
 Rover -> Base  
 Response: None
-```js
+```json
 {
   "type": "status",
-  "status": "busy", // Whether the rover is running a command
-  "current_command": some id
+  "status": "busy", // Whether the rover is running a command ("busy" or "idle")
+  "current_command": 12345678 // The current command id or null
 }
 ```
-### `"cancel_commands"`: Cancels all commands in the queue
+### `"clear_queue"`: Cancels all commands in the queue
 Driver -> Base  
-Response: `"clear_queue"`
-```js
+Response: `"queue_status"`
+```json
 {
     "type": "clear_queue"
 }
@@ -58,19 +58,35 @@ Response: `"clear_queue"`
 ### `"queue_status"`: Returns all commands in the queue
 Base -> Driver  
 Response: None
-```js
+```json
 {
     "type": "queue_status",
-    "commands": [ // The ids of the commands in the queue
-        17574336,
-        63347571
+    "current_command": { // The full message that initiated the running command
+        "type": "command",
+        "id": 14550083,
+        "command": "move_camera",
+        "parameters": {
+            "pan": 48.566,
+            "tilt": -21.093
+        }
+    },
+    "queued_commands": [ // The list of the commands in the queue
+        {
+            "type": "command",
+            "id": 17574336,
+            "command": "move",
+            "parameters": {
+                "distance": 1
+            }
+        },
+        ...
     ]
 }
 ```
 ### `"option"`: Sets or gets options
 Driver -> Base, Base -> Rover  
 Response: `"option_response"`
-```js
+```json
 {
     "type": "option",
     "get": [ // Any options to get
@@ -84,7 +100,7 @@ Response: `"option_response"`
 ### `"option_response"`: Returns option values
 Rover -> Base, Base -> Driver  
 Response: None
-```js
+```json
 {
     "type": "option_response",
     "values": { // The values of all options set and get
@@ -94,13 +110,17 @@ Response: None
 }
 ```
 ### `"digest"`: Reports sensor values
-Rover -> Base, Base -> Driver
+Rover -> Base, Base -> Driver  
 Response: None
-```js
+```json
+// Every sensor must be reported everytime, but can report null
 {
     "type": "digest",
     "sensors": { // The values of each sensor reported
-        "imu": {...},
+        "imu": {
+            "x_accel": 3.2,
+            ... 
+        },
         "humidity": ... 
     }
 }
@@ -108,17 +128,25 @@ Response: None
 ### `"error"`: Reports error in protocol
 Driver <-> Base, Base <-> Rover
 Response: None
-```js
+```json
 {
     "type": "error",
+    "error": "json_parse_error", // The error type
+    "message": "" // A human readable message to be displayed to the drivers
 }
 ```
 ### `"e_stop"`: Stops all commands and clears queue
 Driver -> Base, Base -> Rover
 Response: `status`
-```js
+```json
 {
     "type": "e_stop",
 }
 ```
+###Periodic messages 
+These messages are sent automatically with a frequency usually configurable with the options message
+* `"status"` (Rover -> Base)
+* `"digest"` (Rover -> Baser)
+* `"queue_status"` (Base -> Driver)
+  
 Todo: `"auth"`

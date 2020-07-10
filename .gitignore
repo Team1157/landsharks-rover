@@ -1,5 +1,4 @@
 venv/
-logs/
 
 # Python stuff
 __pycache__/
