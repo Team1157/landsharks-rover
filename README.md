@@ -37,14 +37,6 @@ Response: None
     "contents: {} // Any other info from the command
 }
 ```
-### `"status_query"`: Gets the current command
-Rover -> Base  
-Response: `"status"`
-```js
-{
-  "type": "status_query",
-}
-```
 ### `"status"`: Returns command status and data
 Rover -> Base  
 Response: None

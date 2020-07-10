@@ -17,6 +17,14 @@ class Error(Enum):
     unknown_id = "unknown_id"
 
 
+class Status(Enum):
+    """
+    The possible states that can the rover can be in
+    """
+    ready = "ready"
+    busy = "busy"
+
+
 def _chk_types(msg: dict, checklist: dict) -> bool:
     """
     For each key in checklist, checks that msg has that key and that its type is or is in checklist[key].
@@ -67,12 +75,20 @@ class Msg:
         })
 
     @staticmethod
-    def command_response(contents: dict = {}, error: Error = None, id_: int = None):
+    def command_response(contents: dict = {}, error: Error = None, id_: int = None) -> str:
         return json.dumps({
             "type": "command_response",
             "id": id_,
             "contents": contents,
             "error": (error.value if error is not None else None)
+        })
+
+    @staticmethod
+    def status(status: Status, current_command: int = None):
+        return json.dumps({
+            "type": "status",
+            "status": status.value,
+            "current_command": current_command
         })
 
     # Other utils
@@ -87,9 +103,26 @@ class Msg:
             return False
         if message["type"] == "command" and not _chk_types(message, {"command": str, "params": dict}):
             return False
-        if message["type"] == "command_response" and not _chk_types(message, {
+        elif message["type"] == "command_response" and not _chk_types(message, {
             "id": int,
             "error": ("str" or type(None)),
             "contents": dict
         }):
             return False
+        elif message["type"] == "logs" and not _chk_types(message, {
+            "message": str,
+            "level": str
+        }):
+            return False
+        elif message["type"] == "error" and not _chk_types(message, {
+            "error": str,
+            "message": str
+        }):
+            return False
+        elif message["type"] == "status" and not _chk_types(message, {
+            "status": str,
+            "current_command": (int or type(None))
+        }):
+            return False
+        # TODO: add more checkers
+        return True
