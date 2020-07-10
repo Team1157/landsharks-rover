@@ -21,7 +21,7 @@ class Status(Enum):
     """
     The possible states that can the rover can be in
     """
-    ready = "ready"
+    idle = "idle"
     busy = "busy"
 
 
