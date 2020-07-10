@@ -13,13 +13,13 @@ class RoverBaseStation:
         self.rovers: t.Set[websockets.WebSocketServerProtocol] = set()
 
         self.command_ids: t.Dict[int, websockets.WebSocketServerProtocol] = {}
-        self.command_queue: asyncio.Queue
+        self.command_queue: t.List[t.Dict[str, t.Any]] = []
+        self.current_command: t.Optional[t.Dict[str, t.Any]] = None
 
-        self.logger = logging.getLogger("base_station")
-        self.log_path = log_file = "logs/" + datetime.date.today().isoformat() + ".log"
-        logging.basicConfig(filename=log_file, level=logging.DEBUG,
+        self.logger: logging.Logger = logging.getLogger("base_station")
+        self.log_path: str = "logs/" + datetime.date.today().isoformat() + ".log"
+        logging.basicConfig(filename=self.log_path, level=logging.DEBUG,
                             format='%(asctime)s [%(levelname)s] [%(name)s: %(module)s.%(funcName)s] %(message)s')
-        self.logger.warning("hello!")
 
     async def broadcast(self, message: str):
         """
@@ -47,7 +47,7 @@ class RoverBaseStation:
 
     async def log(self, message: str, level="info"):
         """
-        Broadcasts a log message to the connected Drivers
+        Broadcasts a log message to the connected Drivers and writes to local log
         :param message: The message to send
         :param level: The loglevel to indicate (debug, info, warning, error, critical)
         :return:
@@ -69,7 +69,7 @@ class RoverBaseStation:
         elif level == "critical":
             self.logger.critical(message)
         else:
-            self.logger.warning("Invalid logging level: " + level)
+            self.logger.warning(f"Invalid logging level: {level}")
             self.logger.warning(message)
         await self.broadcast_drivers(Msg.log(message, level))
 
@@ -127,15 +127,19 @@ class RoverBaseStation:
                                 await sck.send(Msg.error(Error.id_in_use, "The given command ID is already in use"))
                                 continue
                             self.command_ids[msg["id"]] = sck
-                            # Forward command to rover
-                            await self.broadcast_rovers(json.dumps(msg))
+                            # Put the command in the command queue
+                            await self.command_queue.append(msg)
                             # Log command
                             await self.log(
                                 f"{sck.remote_address} sent command {msg['command']} (#{msg['id']}) "
                                 f"with parameters {msg['parameters']}"
                             )
                         elif msg["type"] == "option":
-                            pass
+                            self.logger.info(f"Getting options {msg['get']!r}, Setting options {msg['set']!r}")
+                            await self.broadcast_rovers(msg)
+                        else:
+                            self.logger.error(f"Received message with an unknown type from {sck.remote_address}")
+                            await sck.send(Msg.error(Error.invalid_message, "Unknown message type"))
 
                     elif sck in self.rovers:
                         if msg["type"] == "log":
@@ -143,7 +147,7 @@ class RoverBaseStation:
                         elif msg["type"] == "command_response":
                             # Route response to correct driver
                             if msg["id"] not in self.command_ids:
-                                await self.log("Command recieved from rover with invalid id", "error")
+                                await self.log("Command received from rover with invalid id", "error")
                                 await sck.send(Msg.error(Error.unknown_id, "The given command ID is not valid"))
                                 continue
                             await self.command_ids[msg["id"]].send(json.dumps(msg))
@@ -154,7 +158,36 @@ class RoverBaseStation:
                             )
                             # Free up command id
                             # May cause issues if more than 1 rover is connected, which shouldn't ever be the case
+                            if self.current_command is None or msg["id"] != self.current_command["id"]:
+                                await self.log("Command response received that does not match the running command",
+                                               "warning")
                             del self.command_ids[msg["id"]]
+                            self.current_command = None
+                        elif msg["type"] == "status":
+                            status = msg["status"]
+                            if status == "busy":
+                                pass
+                            elif status == "idle":
+                                if not len(self.command_queue) == 0:
+                                    next_command = self.command_queue.pop(0)
+                                    await self.broadcast_rovers(json.dumps(next_command))
+                                    await self.log(f"Sent command '{next_command['command']}' "
+                                                   f"with parameters {next_command['parameters']!r}")
+                                    self.current_command = next_command
+                            else:
+                                await self.log(f"Status message received with an unknown status: {status}", "error")
+                        elif msg["type"] == "clear_queue":
+                            while len(self.command_queue) > 0:
+                                # Free up the ids of the removed commands
+                                cmd = self.command_queue.pop(0)
+                                del self.command_ids[cmd["id"]]
+                            await self.log("Queue cleared")
+                            await self.broadcast_rovers(Msg.queue_status(self.current_command, self.command_queue))
+                        elif msg["type"] == "option_response":
+                            await self.log(f"Option response: {msg['values']!r}")
+                            await self.broadcast_drivers(msg)
+                        else:
+                            await sck.send(Msg.error(Error.invalid_message, "Unknown message type"))
 
                     else:
                         await sck.close(1011, "Client was never registered")
@@ -163,7 +196,7 @@ class RoverBaseStation:
                     await sck.send(Msg.error(Error.json_parse_error, "Failed to parse the message"))
                     await self.log(f"Received message with malformed JSON from {sck.remote_address}", "error")
         except Exception as e:
-            await self.log(str(e), "error")
+            await self.log(str(e), "critical")
             raise e
         finally:
             await self.unregister_client(sck)

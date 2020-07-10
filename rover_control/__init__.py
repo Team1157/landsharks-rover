@@ -91,7 +91,6 @@ class LandsharksRover:
         self.current_command_id = None
 
 
-
 # TODO: Split the command definitions off into a separate file somehow
 @LandsharksRover.register_command
 async def ping(*, data: str = ""):

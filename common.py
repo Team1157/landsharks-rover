@@ -67,12 +67,20 @@ class Msg:
         })
 
     @staticmethod
-    def command_response(contents: dict = {}, error: Error = None, id_: int = None):
+    def command_response(contents: dict = None, error: Error = None, id_: int = None) -> str:
         return json.dumps({
             "type": "command_response",
             "id": id_,
-            "contents": contents,
+            "contents": (contents if contents is not None else {}),
             "error": (error.value if error is not None else None)
+        })
+
+    @staticmethod
+    def queue_status(current_command: dict, queued_commands: list) -> str:
+        return json.dumps({
+            "type": "queue_status",
+            "current_command": current_command,
+            "queued_commands": queued_commands
         })
 
     # Other utils
