@@ -113,10 +113,14 @@ Response: None
 Rover -> Base, Base -> Driver  
 Response: None
 ```json
+// Every sensor must be reported everytime, but can report null
 {
     "type": "digest",
     "sensors": { // The values of each sensor reported
-        "imu": {...},
+        "imu": {
+            "x_accel": 3.2,
+            ... 
+        },
         "humidity": ... 
     }
 }

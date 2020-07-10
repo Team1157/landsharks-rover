@@ -1,10 +1,29 @@
 import asyncio
+import csv
 import json
+import os
 import websockets
 import typing as t
 import logging
 import datetime
 from common import Msg, Error
+
+
+def flatten_dict(tree: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    """
+    Takes a multi-level dictionary and flattens it into one layer, with keys representing the path to the value in the
+    original dictionary
+    :param tree: The dictionary to flatten
+    :return: The flattened dictionary
+    """
+    out = {}
+    for key, value in tree.items():
+        if type(value) == dict:
+            for k, v in flatten_dict(value).items():
+                out[f"{key}.{k}"] = v
+        else:
+            out[key] = value
+    return out
 
 
 class RoverBaseStation:
@@ -112,6 +131,10 @@ class RoverBaseStation:
     async def serve(self, sck: websockets.WebSocketServerProtocol, path: str):
         await self.register_client(sck, path)
 
+        data_path: str = os.path.join("base_station", "sensor_data", f"{datetime.date.today().isoformat()}.csv")
+        need_header: bool = not os.path.exists(data_path)
+        data_file: t.TextIO = open(data_path, "a", newline='')
+        data_writer: t.Optional[csv.DictWriter] = None
         try:
             async for msg_raw in sck:  # Continually receive messages
                 try:
@@ -134,6 +157,13 @@ class RoverBaseStation:
                                 f"{sck.remote_address} sent command {msg['command']} (#{msg['id']}) "
                                 f"with parameters {msg['parameters']}"
                             )
+                        elif msg["type"] == "clear_queue":
+                            while len(self.command_queue) > 0:
+                                # Free up the ids of the removed commands
+                                cmd = self.command_queue.pop(0)
+                                del self.command_ids[cmd["id"]]
+                            await self.log("Queue cleared")
+                            await self.broadcast_drivers(Msg.queue_status(self.current_command, self.command_queue))
                         elif msg["type"] == "option":
                             self.logger.info(f"Getting options {msg['get']!r}, Setting options {msg['set']!r}")
                             await self.broadcast_rovers(msg)
@@ -176,15 +206,26 @@ class RoverBaseStation:
                                     self.current_command = next_command
                             else:
                                 await self.log(f"Status message received with an unknown status: {status}", "error")
-                        elif msg["type"] == "clear_queue":
-                            while len(self.command_queue) > 0:
-                                # Free up the ids of the removed commands
-                                cmd = self.command_queue.pop(0)
-                                del self.command_ids[cmd["id"]]
-                            await self.log("Queue cleared")
-                            await self.broadcast_rovers(Msg.queue_status(self.current_command, self.command_queue))
                         elif msg["type"] == "option_response":
                             await self.log(f"Option response: {msg['values']!r}")
+                            await self.broadcast_drivers(msg)
+                        elif msg["type"] == "digest":
+                            flattened_data = flatten_dict(msg)
+                            new_path = os.path.join("base_station", "sensor_data",
+                                                    f"{datetime.date.today().isoformat()}.csv")
+                            if data_path != new_path:
+                                # Switch data files
+                                data_file.close()
+                                data_path = new_path
+                                data_file = open(data_path, "w", newline='')
+                                need_header = True
+                                data_writer = None
+                            if data_writer is None:
+                                data_writer = csv.DictWriter(data_file, fieldnames=flattened_data.keys())
+                                if need_header:
+                                    data_writer.writeheader()
+                                    need_header = False
+                            data_writer.writerow(flattened_data)
                             await self.broadcast_drivers(msg)
                         else:
                             await sck.send(Msg.error(Error.invalid_message, "Unknown message type"))
@@ -199,4 +240,5 @@ class RoverBaseStation:
             await self.log(str(e), "critical")
             raise e
         finally:
+            data_file.close()
             await self.unregister_client(sck)
