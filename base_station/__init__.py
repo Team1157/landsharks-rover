@@ -251,6 +251,7 @@ class RoverBaseStation:
                         await self.broadcast_drivers(msg)
                     elif msg["type"] == "digest":
                         flattened_data = flatten_dict(msg)
+                        flattened_data["time_stamp"] = datetime.datetime.now().isoformat()
                         new_path = os.path.join("base_station", "sensor_data",
                                                 f"{datetime.date.today().isoformat()}.csv")
                         if data_path != new_path:
@@ -262,9 +263,9 @@ class RoverBaseStation:
                             data_writer = None
                         if data_writer is None:
                             data_writer = csv.DictWriter(data_file, fieldnames=flattened_data.keys())
-                            if need_header:
-                                data_writer.writeheader()
-                                need_header = False
+                        if need_header:
+                            data_writer.writeheader()
+                            need_header = False
                         data_writer.writerow(flattened_data)
                         await self.broadcast_drivers(msg)
                     elif msg["type"] == "log":
