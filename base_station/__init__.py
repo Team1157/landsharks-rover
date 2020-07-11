@@ -4,7 +4,8 @@ import json
 import os
 import websockets
 import typing as t
-import logging, logging.handlers
+import logging
+from logging import handlers
 import datetime
 from common import Msg, Error
 
@@ -201,22 +202,29 @@ class RoverBaseStation:
                         await self.log(f"Queue cleared by {sck.remote_address[0]}")
                         await self.broadcast_drivers(Msg.queue_status(self.current_command, self.command_queue))
                     elif msg["type"] == "option":
-                        self.logger.info(f"{sck.remote_address[0]} getting options {msg['get']!r}, Setting options {msg['set']!r}")
+                        self.logger.info(f"{sck.remote_address[0]} getting options {msg['get']!r}, "
+                                         f"Setting options {msg['set']!r}")
                         await self.broadcast_rovers(msg)
                     elif msg["type"] == "log":
                         # Route log to drivers
                         await self.log(f"Driver {sck.remote_address[0]} logged: {msg['message']}", msg["level"])
+                    elif msg["type"] == "error":
+                        await self.log(f"Driver {sck.remote_address[0]} reported error {msg['error']}: "
+                                       f"{msg['message']}", "error")
+                    elif msg["type"] == "e_stop":
+                        await self.broadcast_rovers(msg)
+                        await self.log(f"Driver {sck.remote_address[0]} activated e-stop!", "warning")
                     else:
-                        await self.log(f"Received message with an unknown type from {sck.remote_address[0]}", "error")
                         await sck.send(Msg.error(Error.invalid_message, "Unknown message type"))
+                        await self.log(f"Received message with an unknown type from {sck.remote_address[0]}", "error")
 
                 elif sck in self.rovers:
                     if msg["type"] == "command_response":
                         # Route response to correct driver
                         if msg["id"] not in self.command_ids:
+                            await sck.send(Msg.error(Error.unknown_id, "The given command ID is not valid"))
                             await self.log(f"Command response received from rover {sck.remote_address[0]} "
                                            f"with invalid id", "error")
-                            await sck.send(Msg.error(Error.unknown_id, "The given command ID is not valid"))
                             continue
                         await self.command_ids[msg["id"]].send(json.dumps(msg))
                         # Log (debug)
@@ -271,6 +279,9 @@ class RoverBaseStation:
                     elif msg["type"] == "log":
                         # Route log to drivers
                         await self.log(f"Rover {sck.remote_address[0]} logged: {msg['message']}", msg["level"])
+                    elif msg["type"] == "error":
+                        await self.log(f"Rover {sck.remote_address[0]} reported error {msg['error']}: "
+                                       f"{msg['message']}", "error")
                     else:
                         await sck.send(Msg.error(Error.invalid_message, "Unknown message type"))
 

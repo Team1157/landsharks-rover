@@ -19,7 +19,7 @@ class Error(Enum):
 
 class Status(Enum):
     """
-    The possible states that can the rover can be in
+    The possible states that the rover can be in
     """
     idle = "idle"
     busy = "busy"

@@ -132,7 +132,7 @@ Response: none
 {
     "type": "error",
     "error": "json_parse_error", // The error type
-    "message": "" // Human readable message to be displayed to the drivers
+    "message": "Received message with malformed JSON" // Human readable message to be displayed to the drivers
 }
 ```
 ### `"e_stop"`: Stops all commands and clears queue
