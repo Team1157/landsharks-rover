@@ -1,0 +1,71 @@
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>Rover Control</title>
+  <meta name="description" content="Rover Control Panel">
+  <meta name="author" content="SitePoint">
+
+  <link rel="stylesheet" href="stylesheet.css">
+
+</head>
+
+<body>
+  <div id="wrapper">
+  <div id="sidebarleft">
+    <h1>Command Que</h1>
+    <p>move forward 1 meter... Done!</p>
+    <p>turn right 15 degrees...</p>
+  </div>
+  <div id="sidebarright">
+    <div class=slidercontainer>
+      <p>movement distance (m)</p>
+      <input type="range" min="0" max="10" value="1" step=".5" class="slider" id="moveAmountSlider">
+      <input type="number" min="0" max="10" step="any" class="numeric" id="moveAmountNumber">
+    </div>
+    <div class=slidercontainer>
+      <p>movement speed (m/s)</p>
+      <input type="range" min="0" max="1.2" value="1" step=".1" class="slider" id="moveSpeedSlider">
+      <input type="number" min="0" max="1.2" step="any" class="numeric" id="moveSpeedNumber">
+    </div>
+    <div class=slidercontainer>
+      <p>rotation angle (°)</p>
+      <input type="range" min="0" max="180" value="15" step="5" class="slider" id="rotateAmountSlider">
+      <input type="number" min="0" max="180" step="any" class="numeric" id="rotateAmountNumber">
+    </div>
+    <div class=slidercontainer>
+      <p>rotation speed (°/s)</p>
+      <input type="range" min="0" max="15" value="15" step=".5" class="slider" id="rotateSpeedSlider">
+      <input type="number" min="0" max="15" step="any" class="numeric" id="rotateSpeedNumber">
+    </div>
+    <div class="dpad">
+      <table>
+        <tr>
+          <td><div class="tul"></div></td>
+          <td><div class="tum"></div></td>
+          <td><div class="tur"></div></td>
+        </tr>
+        <tr>
+          <td><div class="tml"></div></td>
+          <td><img src="images/stop.png" class="estop" onclick="estop()"></td>
+          <td><div class="tmr"></div></td>
+        </tr>
+        <tr>
+          <td><div class="tbl"></div></td>
+          <td><div class="tbm"></div></td>
+          <td><div class="tbr"></div></td>
+        </tr>
+      </table>
+    </div>
+  </div>
+  <div id="main">
+    <div class="center">
+      <img class="center" src="images/camera-feed-placeholder.jpg">
+      <img class="compass" src="images/compass.png" id="compass">
+    </div>
+  </div>
+  <div class="clear"></div>
+</div>
+<script src="main.js"></script>
+</body>
+</html>
