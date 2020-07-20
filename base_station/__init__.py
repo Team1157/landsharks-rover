@@ -92,7 +92,9 @@ class RoverBaseStation:
         :param message: The message to send
         :return:
         """
-        await asyncio.wait([sck.send(message) for sck in self.drivers.union(self.rovers)])
+        clients = self.drivers.union(self.rovers)
+        if clients:
+            await asyncio.wait([sck.send(message) for sck in clients])
 
     async def broadcast_drivers(self, message: str):
         """
@@ -100,7 +102,8 @@ class RoverBaseStation:
         :param message: The message to send
         :return:
         """
-        await asyncio.wait([sck.send(message) for sck in self.drivers])
+        if self.drivers:
+            await asyncio.wait([sck.send(message) for sck in self.drivers])
 
     async def broadcast_rovers(self, message: str):
         """
@@ -108,7 +111,8 @@ class RoverBaseStation:
         :param message: The message to send
         :return:
         """
-        await asyncio.wait([sck.send(message) for sck in self.rovers])
+        if self.rovers:
+            await asyncio.wait([sck.send(message) for sck in self.rovers])
 
     async def log(self, message: str, level="info"):
         """
@@ -124,12 +128,12 @@ class RoverBaseStation:
             self.logger.warning(message)
         await self.broadcast_drivers(Msg.log(message, level))
 
-    async def register_client(self, sck: websockets.WebSocketServerProtocol, path: str):
+    async def register_client(self, sck: websockets.WebSocketServerProtocol, path: str) -> bool:
         """
         Registers a new client connection
         :param sck: The client connection
         :param path: The connection path, used to determine whether the connected client is a Driver or a Rover.
-        :return:
+        :return: Whether the client was successfully registered
         """
         if path == "/driver":
             self.drivers.add(sck)
@@ -141,8 +145,10 @@ class RoverBaseStation:
             else:
                 await self.log(f"Rover connected: {sck.remote_address[0]}")
         else:
+            await self.log(f"Client tried to connect with invalid path: {sck.remote_address[0]}", "warning")
             await sck.close(1008, "Invalid path")
-            return
+            return False
+        return True
 
     async def unregister_client(self, sck: websockets.WebSocketServerProtocol):
         """
@@ -160,11 +166,20 @@ class RoverBaseStation:
             await self.log(f"Client disconnected which was never registered: {sck.remote_address[0]}", "warning")
 
     async def serve(self, sck: websockets.WebSocketServerProtocol, path: str):
-        await self.register_client(sck, path)
+        if not await self.register_client(sck, path):
+            return
 
-        data_path: str = os.path.join("base_station", "sensor_data", f"{datetime.date.today().isoformat()}.csv")
-        need_header: bool = not os.path.exists(data_path)
-        data_file: t.TextIO = open(data_path, "a", newline='')
+        data_path: str = os.path.join("sensor_data", f"{datetime.date.today().isoformat()}.csv")
+
+        need_header: bool
+        data_file: t.TextIO
+        if os.path.exists(data_path):
+            data_file = open(data_path, "a", newline='')
+            need_header = False
+        else:
+            data_file = open(data_path, "w", newline='')
+            need_header = True
+
         data_writer: t.Optional[csv.DictWriter] = None
         try:
             async for msg_raw in sck:  # Continually receive messages
