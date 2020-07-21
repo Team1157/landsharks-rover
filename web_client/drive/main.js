@@ -1,3 +1,41 @@
+let socket;
+
+let consoleLines = [];
+
+function updateConsole() {
+    let consoleDiv = document.getElementById("consolelines");
+    while (consoleDiv.firstChild) {
+        consoleDiv.removeChild(consoleDiv.firstChild);
+    }
+    consoleLines.forEach(function(line) {
+        let newParagraph = document.createElement("p");
+        let newNode = document.createTextNode(line);
+        newParagraph.append(newNode);
+        consoleDiv.append(newParagraph)
+    });
+}
+
+function writeToConsole(message) {
+    consoleLines.unshift(message);
+    updateConsole();
+}
+
+/**
+ * Logs a message to the console and broadcasts it to the base station if desired
+ *
+ * @param {string} message The message to log
+ * @param {string} level The log severity, one of [debug, info, warning, error, critical]
+ * @param {boolean} broadcast
+ */
+function log(message, level, broadcast) {
+    let formattedMessage = "[" + level.toUpperCase() + "] " + message;
+    console.log(formattedMessage);
+    writeToConsole(formattedMessage);
+    if (broadcast) {
+        //TODO
+    }
+}
+
 function initUi() {
     let moveAmountSlider = document.getElementById("moveAmountSlider");
     let moveAmountNumber = document.getElementById("moveAmountNumber");
@@ -47,17 +85,32 @@ function initUi() {
     rotateSpeedNumber.oninput = function () {
         rotateSpeedSlider.value = this.value;
     };
+
+    let consoleInput = document.getElementById("consoleinput").children.item(0);
+    consoleInput.onkeypress = function(e) {
+        let keyCode = e.which;
+        console.log(keyCode);
+        if (keyCode === 13){
+          // Enter pressed
+          writeToConsole(this.value);
+          this.value = '';
+        }
+    }
+}
+
+function onSocketReady() {
+    log("Connected to " + socket.url, "info", false);
 }
 
 function onMessage(event) {
-    console.log(event.data)
+
 }
 
 function estop() {alert("stop stop STOP!!!");}
 
 window.addEventListener("DOMContentLoaded", function() {
     initUi();
-    let socket = new WebSocket("ws://localhost:11571");
-
-    console.log(socket.readyState);
+    socket = new WebSocket("ws://localhost:11571/driver");
+    socket.onopen = onSocketReady;
+    socket.onmessage = onMessage;
 }, false);

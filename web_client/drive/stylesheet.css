@@ -45,6 +45,33 @@ h1{
 #sidebarright{
  float:right;
 }
+#commandqueue{
+  height: 40%;
+}
+#console{
+  height: 60%;
+  background-color: black;
+}
+#consoleinput{
+  margin-left: 15px;
+}
+#consoleinput > input{
+  width: 100%;
+  color: white;
+  background-color: black;
+  border: none;
+  outline: none;
+  font-family: monospace;
+}
+#consoleprompt{
+  float: left;
+  color: white;
+  margin-left: 5px;
+  width: 10px;
+}
+#consolelines > p{
+  word-break: break-all;
+}
 #main{overflow:hidden}
 table {
   width: 100%;
