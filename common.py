@@ -117,7 +117,7 @@ class Msg:
             "contents": dict
         }):
             return False
-        elif message["type"] == "logs" and not _chk_types(message, {
+        elif message["type"] == "log" and not _chk_types(message, {
             "message": str,
             "level": str
         }):

@@ -30,7 +30,9 @@ function writeToConsole(message) {
 function log(message, level, broadcast) {
     let formattedMessage = "[" + level.toUpperCase() + "] " + message;
     console.log(formattedMessage);
-    writeToConsole(formattedMessage);
+    if (level !== "debug") {
+        writeToConsole(message);
+    }
     if (broadcast) {
         //TODO
     }
@@ -89,7 +91,6 @@ function initUi() {
     let consoleInput = document.getElementById("consoleinput").children.item(0);
     consoleInput.onkeypress = function(e) {
         let keyCode = e.which;
-        console.log(keyCode);
         if (keyCode === 13){
           // Enter pressed
           writeToConsole(this.value);
@@ -102,15 +103,64 @@ function onSocketReady() {
     log("Connected to " + socket.url, "info", false);
 }
 
-function onMessage(event) {
+/**
+ * Verify that a message has the correct parameters for its type
+ *
+ * @param {Object} message The message to verify
+ * @return {boolean} Whether the message passed verification
+ */
+function verifyMsg(message) {
+    let keys = Object.keys(message);
+    let types = {};
+    keys.forEach(function (key) {
+        types[key] = typeof key;
+    });
+    if (!message["type"]) {
+        return false;
+    }
+    if (message["type"] === "log") {
+        return types["message"] === "string" && types["level"] === "string";
+    }
+    // TODO
+}
 
+function onMessage(event) {
+    let rawMessage = event.data;
+    try {
+        let msg = JSON.parse(rawMessage);
+        if (!verifyMsg(msg)) {
+            log("Message failed verification", "error", true);
+            console.log(msg);
+            return;
+        }
+        if (msg["type"] === "log") {
+            log(msg["message"], msg["level"], false);
+        }
+    }
+    catch (e) {
+        log("Received a message with malformed json", "error", true);
+        throw e
+    }
+}
+
+function connect() {
+    socket = new WebSocket("ws://localhost:11571/driver");
+    socket.onerror = async function (ev) {
+        socket.close();
+    };
+    socket.onclose = async function (ev) {
+        log("Socket connection closed", "warning", false);
+        //Sleep 5 seconds
+        await new Promise(r => setTimeout(r, 5000));
+        connect();
+    };
+    socket.onopen = onSocketReady;
+    socket.onmessage = onMessage;
 }
 
 function estop() {alert("stop stop STOP!!!");}
 
-window.addEventListener("DOMContentLoaded", function() {
+window.addEventListener("DOMContentLoaded", async function() {
     initUi();
-    socket = new WebSocket("ws://localhost:11571/driver");
-    socket.onopen = onSocketReady;
-    socket.onmessage = onMessage;
+    connect()
 }, false);
