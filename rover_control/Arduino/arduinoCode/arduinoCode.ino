@@ -1,4 +1,4 @@
-#include <PID_v1.h>
+#include <PID_v1.h> //Brett Beauregard PID library
 /* motor pin layout
  * left|front|right  
  *        ^
@@ -56,6 +56,30 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(EncIntPin[4]), CountM4, RISING);
   attachInterrupt(digitalPinToInterrupt(EncIntPin[5]), CountM5, RISING);
 
+  //set the outputs for the PID loops to +- the resolution of the PWM
+  M0.SetOutputLimits(-255, 255);
+  M1.SetOutputLimits(-255, 255);
+  M2.SetOutputLimits(-255, 255);
+  M3.SetOutputLimits(-255, 255);
+  M4.SetOutputLimits(-255, 255);
+  M5.SetOutputLimits(-255, 255);
+
+  //set PID loop to occur every 50ms
+  M0.SetSampleTime(50);
+  M1.SetSampleTime(50);
+  M2.SetSampleTime(50);
+  M3.SetSampleTime(50);
+  M4.SetSampleTime(50);
+  M5.SetSampleTime(50);
+
+  //Activate PID
+  M0.SetMode(AUTOMATIC);
+  M1.SetMode(AUTOMATIC);
+  M2.SetMode(AUTOMATIC);
+  M3.SetMode(AUTOMATIC);
+  M4.SetMode(AUTOMATIC);
+  M5.SetMode(AUTOMATIC);
+
   Serial.begin(19200);
   while(!Serial){
     ;//wait for serial port to begin program
@@ -70,14 +94,22 @@ void loop() {
     startCount[i] = Count[i];
     startTime[i] = micros(); //done per-motor for accuracy
   }
-  
-  delay(1000); //placeholder for main code
+
+  M0.Compute();
+  M1.Compute();
+  M2.Compute();
+  M3.Compute();
+  M4.Compute();
+  M5.Compute();
+
+  for(int i = 0; i < 6; i++) {
+    SetMotor(i, OutputSpeed[i]);
+  }
 
   for(int i = 0; i < 6; i++) {
     double counts = (Count[i] - startCount[i]);
     double elapsedTime = (micros() - startTime[i]);
     CurrentSpeed[i] = (1000000.0*counts)/(2994.6*elapsedTime);
-    Serial.println(CurrentSpeed[i], 5);
   }
 }
 
@@ -96,3 +128,13 @@ void CountM2 () {CountGeneric(2);}
 void CountM3 () {CountGeneric(3);}
 void CountM4 () {CountGeneric(4);}
 void CountM5 () {CountGeneric(5);}
+
+void SetMotor (byte motor, double setting) {
+  analogWrite(MotPwmPin[motor], abs(setting));
+  digitalWrite(MotDirPin[motor], sgn(setting));
+}
+
+template <typename type>
+type sgn(type value) {
+  return type((value>0)-(value<0));
+}
