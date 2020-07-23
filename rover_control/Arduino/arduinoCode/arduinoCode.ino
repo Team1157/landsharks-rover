@@ -134,6 +134,7 @@ void SetMotor (byte motor, double setting) {
   digitalWrite(MotDirPin[motor], sgn(setting));
 }
 
+//signum function
 template <typename type>
 type sgn(type value) {
   return type((value>0)-(value<0));
