@@ -1,4 +1,6 @@
 let socket;
+let connectedRovers =[];
+let connectedDrivers = [];
 
 let consoleLines = [];
 
@@ -118,10 +120,16 @@ function verifyMsg(message) {
     if (!message["type"]) {
         return false;
     }
-    if (message["type"] === "log") {
-        return types["message"] === "string" && types["level"] === "string";
+    switch (message["type"]) {
+        case "log":
+            return types["message"] === "string" && types["level"] === "string";
+        case "error":
+            return types["error"] === "string" && types["message"] === "string";
+        case "query_response":
+            return types["query"] === "string" && types["value"] !== undefined;
+        default:
+            return false
     }
-    // TODO
 }
 
 function onMessage(event) {
@@ -129,17 +137,50 @@ function onMessage(event) {
     try {
         let msg = JSON.parse(rawMessage);
         if (!verifyMsg(msg)) {
-            log("Message failed verification", "error", true);
+            log("Message from Base failed verification", "error", true);
             console.log(msg);
             return;
         }
-        if (msg["type"] === "log") {
-            log(msg["message"], msg["level"], false);
+        switch (msg["type"]) {
+            case "log": {
+                log(msg["message"], msg["level"], false);
+                break;
+            }
+            case "error": {
+                log("Base error: " + msg["message"], "error", false);
+                break;
+            }
+            case "query_response": {
+                switch (msg["query"]) {
+                    case "client_list": {
+                        let clients = msg["value"];
+                        if (typeof clients === "object" && clients["rovers"] !== undefined && clients["drivers"] !== undefined) {
+                            connectedRovers = clients["rovers"];
+                            connectedDrivers = clients["drivers"];
+                            document.getElementById("noBaseMessage").style.display = "none";
+                            if (connectedRovers.size > 0) {
+                                document.getElementById("noRoverMessage").style.display = "none";
+                                document.getElementById("roverUI").style.display = "block";
+                            } else {
+                                document.getElementById("noRoverMessage").style.display = "block";
+                                document.getElementById("roverUI").style.display = "none";
+                            }
+                        } else {
+                            log("Base query response improperly formatted", "error", true)
+                        }
+                        break;
+                    }
+                    default:
+                        log("Base responded to unknown query", "error", true)
+                }
+                break;
+            }
+            default:
+                log("Message passed verification, but was not handled", "error", true)
         }
     }
     catch (e) {
-        log("Received a message with malformed json", "error", true);
-        throw e
+        log("Error in message parsing/handling", "error", true);
     }
 }
 
@@ -150,6 +191,9 @@ function connect() {
     };
     socket.onclose = async function (ev) {
         log("Socket connection closed", "warning", false);
+        document.getElementById("noBaseMessage").style.display = "block";
+        document.getElementById("noRoverMessage").style.display = "none";
+        document.getElementById("roverUI").style.display = "none";
         //Sleep 5 seconds
         await new Promise(r => setTimeout(r, 5000));
         connect();
@@ -158,9 +202,30 @@ function connect() {
     socket.onmessage = onMessage;
 }
 
-function estop() {alert("stop stop STOP!!!");}
+function eStop() {
+    if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+            "type": "e_stop"
+        }));
+        log("Sent e-stop!", "debug", false)
+    }
+}
 
-window.addEventListener("DOMContentLoaded", async function() {
+async function sendQueries() {
+    while (true) {
+        if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+                "type": "query",
+                "query": "client_list"
+            }))
+        }
+        //Sleep 5 seconds
+        await new Promise(r => setTimeout(r, 2000));
+    }
+}
+
+window.addEventListener("DOMContentLoaded", function() {
     initUi();
-    connect()
+    connect();
+    sendQueries();
 }, false);

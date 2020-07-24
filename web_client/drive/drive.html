@@ -54,7 +54,7 @@
         </tr>
         <tr>
           <td><div class="tml"></div></td>
-          <td><img src="images/stop.png" class="estop" onclick="estop()"></td>
+          <td><img src="images/stop.png" class="estop" onclick="eStop()"></td>
           <td><div class="tmr"></div></td>
         </tr>
         <tr>
@@ -67,8 +67,11 @@
   </div>
   <div id="main">
     <div class="center">
-      <img class="center" src="images/camera-feed-placeholder.jpg">
-      <img class="compass" src="images/compass.png" id="compass">
+      <p id="noBaseMessage">[Disconnected from base station]</p>
+      <p id="noRoverMessage" style="display: none">[Rover not connected]</p>
+      <div id="roverUI" style="display: none">
+        <img class="compass" src="images/compass.png" id="compass">
+      </div>
     </div>
   </div>
   <div class="clear"></div>

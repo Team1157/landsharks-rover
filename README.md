@@ -88,6 +88,7 @@ Driver → Base → Rover
 Response: `"option_response"`
 ```js
 {
+    // Both set and get are required, can be empty
     "type": "option",
     "get": [ // Any options to get
         "camera_framerate"
@@ -123,6 +124,25 @@ Response: none
         },
         "humidity": ... 
     }
+}
+```
+### `"query"`: Gets a value from the base station
+Driver → Base  
+Response: `"query_response"`
+```js
+{
+    "type": "query",
+    "query": "client_list"
+}
+```
+### `"query_response"`: Returns a value from the base station to the driver
+Driver ← Base  
+Response: none
+```js
+{
+    "type": "query_response",
+    "query": "client_list",
+    "value": // Any object
 }
 ```
 ### `"error"`: Reports error in protocol

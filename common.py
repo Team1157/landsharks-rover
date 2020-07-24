@@ -99,6 +99,14 @@ class Msg:
             "queued_commands": queued_commands
         })
 
+    @staticmethod
+    def query_response(query: str, value) -> str:
+        return json.dumps({
+            "type": "query_response",
+            "query": query,
+            "value": value
+        })
+
     # Other utils
     @staticmethod
     def verify(message: dict) -> bool:
@@ -107,30 +115,55 @@ class Msg:
         :param message: The message to verify
         :return:
         """
-        if not _chk_types(message, {"type": str}):
+        if "type" not in message.keys():
             return False
-        if message["type"] == "command" and not _chk_types(message, {"command": str, "params": dict}):
-            return False
-        elif message["type"] == "command_response" and not _chk_types(message, {
-            "id": int,
-            "error": ("str" or type(None)),
-            "contents": dict
-        }):
-            return False
-        elif message["type"] == "log" and not _chk_types(message, {
-            "message": str,
-            "level": str
-        }):
-            return False
-        elif message["type"] == "error" and not _chk_types(message, {
-            "error": str,
-            "message": str
-        }):
-            return False
-        elif message["type"] == "status" and not _chk_types(message, {
-            "status": str,
-            "current_command": (int or type(None))
-        }):
-            return False
-        # TODO: add more checkers
-        return True
+        if message["type"] == "command":
+            return _chk_types(message, {
+                "type": str,
+                "id": int,
+                "command": str,
+                "parameters": dict
+            })
+        elif message["type"] == "clear_queue":
+            return True
+        elif message["type"] == "option":
+            return _chk_types(message, {
+                "set": dict,
+                "get": dict
+            })
+        elif message["type"] == "log":
+            return _chk_types(message, {
+                "message": str,
+                "level": str
+            })
+        elif message["type"] == "error":
+            return _chk_types(message, {
+                "error": str,
+                "message": str
+            })
+        elif message["type"] == "query":
+            return _chk_types(message, {
+                "query": str
+            })
+        elif message["type"] == "e_stop":
+            return True
+        elif message["type"] == "command_response":
+            return _chk_types(message, {
+                "id": int,
+                "error": (str, None),
+                "contents": dict
+            })
+        elif message["type"] == "status":
+            return _chk_types(message, {
+                "status": str,
+                "current_command": (int, None)
+            })
+        elif message["type"] == "option_response":
+            return _chk_types(message, {
+                "values": dict
+            })
+        elif message["type"] == "digest":
+            return _chk_types(message, {
+                "sensors": dict
+            })
+        return False

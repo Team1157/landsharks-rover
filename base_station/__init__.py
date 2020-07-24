@@ -229,6 +229,17 @@ class RoverBaseStation:
                     elif msg["type"] == "e_stop":
                         await self.broadcast_rovers(msg)
                         await self.log(f"Driver {sck.remote_address[0]} activated e-stop!", "warning")
+                    elif msg["type"] == "query":
+                        if msg["query"] == "client_list":
+                            await sck.send(Msg.query_response(
+                                "client_list",
+                                {
+                                    "drivers": [s.remote_address[0] for s in self.drivers],
+                                    "rovers": [s.remote_address[0] for s in self.rovers]
+                                }))
+                        else:
+                            await sck.send(Msg.error(Error.invalid_message, "Invalid query type"))
+                            await self.log(f'Received and invalid query from {sck.remote_address}')
                     else:
                         await sck.send(Msg.error(Error.invalid_message, "Unknown message type"))
                         await self.log(f"Received message with an unknown type from {sck.remote_address[0]}", "error")
@@ -303,9 +314,9 @@ class RoverBaseStation:
                 else:
                     await sck.close(1011, "Client was never registered")
         except Exception as e:
+            await self.logger.exception(e)
             # Send exception to drivers
-            await self.log(str(e), "critical")
-            raise e
+            await self.log("Base station error: " + repr(e), "critical")
         finally:
             data_file.close()
             await self.unregister_client(sck)

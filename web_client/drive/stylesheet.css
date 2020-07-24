@@ -95,6 +95,12 @@ td:hover{
   max-width:100%;
   max-height:100vh;
 }
+.center > p {
+  font-family: monospace;
+  font-size: 3em;
+  text-align: center;
+  padding-top: 45vh;
+}
 .compass {
   position: absolute;
   width: 100px;
