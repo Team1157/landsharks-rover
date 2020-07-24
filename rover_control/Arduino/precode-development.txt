@@ -1,0 +1,37 @@
+needs start-of-packet sequence. header with message length
+
+Commands:
+	unified wheels move (specify movement for each wheel)
+	unified travel (specify overall travel)
+	individual wheel move
+	poll wheel data
+	heartbeat
+	potential sensor commands?
+	set PID values
+	read PID values
+	E-stop
+	camera servos control
+
+format (each is a byte):
+	command (length based on command ID)
+	
+more complete command stuff
+	Estop          : 0x00
+	Heartbeat      : 0x01
+	
+_________________________________________________________________
+movement calculation
+
+D = .29m
+VMax = 1.1m/s; //roughly - need empirical
+VIn = getInput() * 1m/s;
+VMmVI = VMax - VIn;
+RefRad = (vin * d)/VMmVI;
+Angle = VMmVI/d;
+OuterTravel = (RefRad + d) * Angle;
+InnerTravel = (RefRad - d) * Angle;
+_________________________________________________________________
+control loop
+
+PID loop controlling driver power output as a function of motor velocity set by velocity.
+PID loop controlling motor velocity (input to other PID) as a function of motor position set by a total travel distance.
