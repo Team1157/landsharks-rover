@@ -33,5 +33,5 @@ InnerTravel = (RefRad - d) * Angle;
 _________________________________________________________________
 control loop
 
-PID loop controlling driver power output as a function of motor velocity set by velocity. One per motor
-PID loop controlling motor velocity (input to other PID) as a function of motor position set by a total travel distance. One per side
+PID loop controlling driver power output as a function of motor velocity set by velocity.
+PID loop controlling motor velocity (input to other PID) as a function of motor position set by a total travel distance.

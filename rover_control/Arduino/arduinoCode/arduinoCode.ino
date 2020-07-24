@@ -1,4 +1,3 @@
-#include <PID_v1.h> //Brett Beauregard PID library
 /* motor pin layout
  * left|front|right  
  *        ^
@@ -19,18 +18,6 @@ const bool InvertCtl[] = { 1,  1,  1,  0,  0,  0}; //if all motors are wired the
 long CountStep[6] = {0}; //count step set by InvertCt[]. Should always be +-1
 
 volatile long Count[6] = {0}; //cumulative total count of encoder ticks
-
-volatile double CurrentSpeed[6], //speed of motors read from encoders
-                OutputSpeed[6],  //speed PID controller will output
-                TargetSpeed[6];  //speed PID controller is trying to reach
-
-//PID setup. Speed motor is at currently, speed PID is outputting to motor, speed target for motor, coefficients, direction.
-PID M0(&CurrentSpeed[0], &OutputSpeed[0], &TargetSpeed[0], 2, 5, 1, DIRECT);
-PID M1(&CurrentSpeed[1], &OutputSpeed[1], &TargetSpeed[1], 2, 5, 1, DIRECT);
-PID M2(&CurrentSpeed[2], &OutputSpeed[2], &TargetSpeed[2], 2, 5, 1, DIRECT);
-PID M3(&CurrentSpeed[3], &OutputSpeed[3], &TargetSpeed[3], 2, 5, 1, DIRECT);
-PID M4(&CurrentSpeed[4], &OutputSpeed[4], &TargetSpeed[4], 2, 5, 1, DIRECT);
-PID M5(&CurrentSpeed[5], &OutputSpeed[5], &TargetSpeed[5], 2, 5, 1, DIRECT);
 
 void setup() {
   for(int i = 0; i < 6; i++) {
@@ -56,30 +43,6 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(EncIntPin[4]), CountM4, RISING);
   attachInterrupt(digitalPinToInterrupt(EncIntPin[5]), CountM5, RISING);
 
-  //set the outputs for the PID loops to +- the resolution of the PWM
-  M0.SetOutputLimits(-255, 255);
-  M1.SetOutputLimits(-255, 255);
-  M2.SetOutputLimits(-255, 255);
-  M3.SetOutputLimits(-255, 255);
-  M4.SetOutputLimits(-255, 255);
-  M5.SetOutputLimits(-255, 255);
-
-  //set PID loop to occur every 50ms
-  M0.SetSampleTime(50);
-  M1.SetSampleTime(50);
-  M2.SetSampleTime(50);
-  M3.SetSampleTime(50);
-  M4.SetSampleTime(50);
-  M5.SetSampleTime(50);
-
-  //Activate PID
-  M0.SetMode(AUTOMATIC);
-  M1.SetMode(AUTOMATIC);
-  M2.SetMode(AUTOMATIC);
-  M3.SetMode(AUTOMATIC);
-  M4.SetMode(AUTOMATIC);
-  M5.SetMode(AUTOMATIC);
-
   Serial.begin(19200);
   while(!Serial){
     ;//wait for serial port to begin program
@@ -94,13 +57,6 @@ void loop() {
     startCount[i] = Count[i];
     startTime[i] = micros(); //done per-motor for accuracy
   }
-
-  M0.Compute();
-  M1.Compute();
-  M2.Compute();
-  M3.Compute();
-  M4.Compute();
-  M5.Compute();
 
   for(int i = 0; i < 6; i++) {
     SetMotor(i, OutputSpeed[i]);
