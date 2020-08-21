@@ -1,5 +1,6 @@
-venv/
+rover_users.json
 
 # Python stuff
+venv/
 __pycache__/
 *.pyc
