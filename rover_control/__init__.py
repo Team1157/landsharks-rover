@@ -1,16 +1,18 @@
 import asyncio
 import json
+import os
 import typing as t
 import inspect
 import websockets
+import psutil
 from common import Msg, Error
 
 
 class LandsharksRover:
-    commands: t.Dict[str, t.Callable[[...], t.Coroutine]] = {}
+    commands: t.Dict[str, t.Callable[..., t.Coroutine]] = {}
 
     @classmethod
-    def register_command(cls, fn: t.Callable[[...], t.Coroutine]):
+    def register_command(cls, fn: t.Callable[..., t.Coroutine]):
         cls.commands[fn.__name__] = fn
 
     def __init__(self):
@@ -89,6 +91,29 @@ class LandsharksRover:
             id_=return_id
         ))
         self.current_command_id = None
+
+
+def collect_sensors():
+    # Get various pi stat values
+    ram = psutil.virtual_memory()
+    disk = psutil.disk_usage("/")
+    # psutil.sensors_temperatures only exists on Linux
+    if "sensors_temperatures" in psutil.__all__:
+        cpu_temp = psutil.sensors_temperatures()["coretemp"][0].current
+    else:
+        cpu_temp = 0.0  # dummy value
+    this_proc = psutil.Process(os.getpid())
+    return {
+        "pi": {
+            "cpu_percent": psutil.cpu_percent(),
+            "cpu_temp": cpu_temp,
+            "ram_percent": ram.percent,
+            "ram_free": ram.available,
+            "disk_percent": disk.percent,
+            "disk_free": disk.free,
+            "ctl_ram_used": this_proc.memory_full_info().uss
+        }
+    }
 
 
 # TODO: Split the command definitions off into a separate file somehow

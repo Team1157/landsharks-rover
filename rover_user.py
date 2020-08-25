@@ -4,31 +4,32 @@ Command-line utility for managing rover users
 
 import click
 import sys
+import os
 import json
 from getpass import getpass
 import bcrypt
 
 
 @click.group()
-@click.option("-f", "--file", default="rover_users.json")
+@click.option("-f", "--file", "filename", default=os.path.join("base_station", "rover_users.json"), show_default=True)
 @click.pass_context
-def rover_user(ctx, file):
+def rover_user(ctx, filename):
     """
-    Main command callback. Reads the inital state of the userbase file.
+    Command-line utility for managing rover users and permissions
     """
     # Make sure context is a dict
     ctx.ensure_object(dict)
     # Hold onto filename for write later
-    ctx.obj["file"] = file
+    ctx.obj["file"] = filename
     # Read file
     try:
-        with open(file, "r") as f:
+        with open(filename, "r") as f:
             ctx.obj["users"] = json.load(f)
     # Warning and continue if userbase file does not exist
     except FileNotFoundError:
-        click.echo(f"Initialized new userbase file in {file}")
+        click.echo(f"Initialized new userbase file in {filename}")
         ctx.obj["users"] = {}
-    # Error and quit if malformed JSON
+    # Exit if malformed JSON
     except json.JSONDecodeError:
         click.echo("Unable to open userbase file: file contains malformed JSON", err=True)
         sys.exit(1)
@@ -52,7 +53,7 @@ def add(ctx, username):
     """
     Adds a new user to the userbase
     """
-    # Error if user exists
+    # Exit if user exists
     if username in ctx.obj["users"]:
         click.echo(f"Unable to add user: user {username} exists", err=True)
         sys.exit(1)
@@ -85,6 +86,9 @@ def remove(ctx, username):
 @rover_user.command()
 @click.pass_context
 def list_users(ctx):
+    """
+    Lists all registered users
+    """
     # List users
     click.echo(", ".join(ctx.obj["users"].keys()))
 

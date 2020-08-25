@@ -15,6 +15,7 @@ class Error(Enum):
     invalid_message = "invalid_message"
     id_in_use = "id_in_use"
     unknown_id = "unknown_id"
+    auth_error = "auth_error"
 
 
 class Status(Enum):
@@ -115,8 +116,12 @@ class Msg:
         :param message: The message to verify
         :return:
         """
-        if "type" not in message.keys():
+        # NoneType reference for allowing a variable to be None
+        _nonetype = type(None)
+        # Always error if there is no "type" key
+        if "type" not in message:
             return False
+        # Verify message types
         if message["type"] == "command":
             return _chk_types(message, {
                 "type": str,
@@ -150,13 +155,13 @@ class Msg:
         elif message["type"] == "command_response":
             return _chk_types(message, {
                 "id": int,
-                "error": (str, None),
+                "error": (str, _nonetype),
                 "contents": dict
             })
         elif message["type"] == "status":
             return _chk_types(message, {
                 "status": str,
-                "current_command": (int, None)
+                "current_command": (int, _nonetype)
             })
         elif message["type"] == "option_response":
             return _chk_types(message, {
@@ -165,5 +170,10 @@ class Msg:
         elif message["type"] == "digest":
             return _chk_types(message, {
                 "sensors": dict
+            })
+        elif message["type"] == "auth":
+            return _chk_types(message, {
+                "username": str,
+                "password": str
             })
         return False

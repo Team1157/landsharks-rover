@@ -1,4 +1,5 @@
 websockets  # For communication between base station and rover, and between driver station and base station
 pyserial-asyncio  # For communication between Raspberry Pi and Arduino on rover
+psutil  # For system monitoring on Pi
 bcrypt  # For password hashing and checking
 click  # For `rover_user` command-line utility
