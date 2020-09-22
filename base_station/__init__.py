@@ -5,8 +5,9 @@ import os
 import websockets
 import typing as t
 import logging
-from logging import handlers
+import logging.handlers
 import datetime
+import bcrypt
 from common import Msg, Error
 
 # Numeric logging levels as defined by `logging`
@@ -43,6 +44,7 @@ class RoverBaseStation:
         self.drivers: t.Set[websockets.WebSocketServerProtocol] = set()
         self.rovers: t.Set[websockets.WebSocketServerProtocol] = set()
 
+        # Command queue
         self.command_ids: t.Dict[int, websockets.WebSocketServerProtocol] = {}
         self.command_queue: t.List[t.Dict[str, t.Any]] = []
         self.current_command: t.Optional[t.Dict[str, t.Any]] = None
@@ -83,6 +85,14 @@ class RoverBaseStation:
         for logger in loggers:
             logger.addHandler(stream_handl)
             logger.addHandler(file_handl)
+
+        # User authentication "database"
+        try:
+            with open("rover_users.json", "r") as f:
+                self.users = json.load(f)
+        except FileNotFoundError:
+            self.logger.critical("Unable to open rover_users.json: file does not exist.")
+            raise SystemExit(1)
 
         self.logger.info("Rover base station starting!")
 
@@ -135,6 +145,12 @@ class RoverBaseStation:
         :param path: The connection path, used to determine whether the connected client is a Driver or a Rover.
         :return: Whether the client was successfully registered
         """
+        # Authenticate client
+        auth = self.authenticate_client(sck)
+        if not auth:
+            return False
+        # TODO: check user groups
+        # Determine access mode
         if path == "/driver":
             self.drivers.add(sck)
             await self.log(f"New driver connected: {sck.remote_address[0]}")
@@ -164,6 +180,42 @@ class RoverBaseStation:
             await self.log(f"Rover disconnected: {sck.remote_address[0]}")
         else:
             await self.log(f"Client disconnected which was never registered: {sck.remote_address[0]}", "warning")
+
+    async def authenticate_client(self, sck: websockets.WebSocketServerProtocol):
+        """
+        Authenticates a client connection
+        :param sck:
+        :return: the list of groups which the client belongs to, or None if the authentication failed
+        """
+        # Receive first message, which should be an `auth` message
+        auth_msg_raw = await sck.recv()
+        try:
+            auth_msg = json.loads(auth_msg_raw)
+        # Error if invalid JSON
+        except json.JSONDecodeError:
+            await sck.send(Msg.error(Error.json_parse_error, "Failed to parse message"))
+            await self.log(f"Received message with malformed JSON from {sck.remote_address[0]}", "error")
+            return False
+        # Error if invalid message format
+        if not Msg.verify(auth_msg):
+            await sck.send(Msg.error(Error.invalid_message, "The message sent is invalid"))
+            await self.log(f"Received invalid message from {sck.remote_address[0]}", "error")
+            return False
+        # Error if first message is not of type `auth`
+        if not auth_msg["type"] == "auth":
+            await sck.send(Msg.error(Error.auth_error, "Expected an `auth` message"))
+            await self.log(
+                f"Expected `auth` message but received `{auth_msg['type']}` from {sck.remote_address[0]}",
+                "error"
+            )
+            return False
+        # Verify identity
+        user = self.users[auth_msg["username"]]
+        if not bcrypt.checkpw(auth_msg["password"].encode("utf-8"), user["pw_hash"].encode("ascii")):
+            await sck.send(Msg.error(Error.auth_error, "Authentication failed"))
+            await self.log(f"Client tried to connect but failed to authenticate: {sck.remote_address[0]}", "warning")
+            return False
+        return user["groups"]
 
     async def serve(self, sck: websockets.WebSocketServerProtocol, path: str):
         if not await self.register_client(sck, path):
@@ -314,7 +366,7 @@ class RoverBaseStation:
                 else:
                     await sck.close(1011, "Client was never registered")
         except Exception as e:
-            await self.logger.exception(e)
+            self.logger.exception(e)
             # Send exception to drivers
             await self.log("Base station error: " + repr(e), "critical")
         finally:
