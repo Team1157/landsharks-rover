@@ -9,38 +9,14 @@ import logging.handlers
 import datetime
 import bcrypt
 from common import Msg, Error
-
-# Numeric logging levels as defined by `logging`
-LOG_LEVELS = {
-    "critical": logging.CRITICAL,
-    "fatal": logging.FATAL,
-    "error": logging.ERROR,
-    "warning": logging.WARNING,
-    "warn": logging.WARN,
-    "info": logging.INFO,
-    "debug": logging.DEBUG
-}
-
-
-def flatten_dict(tree: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-    """
-    Takes a multi-level dictionary and flattens it into one layer, with keys representing the path to the value in the
-    original dictionary
-    :param tree: The dictionary to flatten
-    :return: The flattened dictionary
-    """
-    out = {}
-    for key, value in tree.items():
-        if type(value) == dict:
-            for k, v in flatten_dict(value).items():
-                out[f"{key}.{k}"] = v
-        else:
-            out[key] = value
-    return out
+from base_station.config import Config
+from base_station.util import LOG_LEVELS, flatten_dict
 
 
 class RoverBaseStation:
-    def __init__(self):
+    def __init__(self, _config: Config):
+        self.config = _config
+
         self.drivers: t.Set[websockets.WebSocketServerProtocol] = set()
         self.rovers: t.Set[websockets.WebSocketServerProtocol] = set()
 
@@ -50,49 +26,49 @@ class RoverBaseStation:
         self.current_command: t.Optional[t.Dict[str, t.Any]] = None
 
         # #  LOGGING CONFIGURATION  # #
-        # Create logger
-        self.logger = logging.getLogger("base_station")
-        self.logger.setLevel(logging.DEBUG)
-        # Get other loggers to add handlers to, set them to INFO
-        ws_log = logging.getLogger("websockets")
-        ws_log.setLevel(logging.INFO)
-        ws_proto_log = logging.getLogger("websockets.protocol")
-        ws_proto_log.setLevel(logging.INFO)
-        ws_server_log = logging.getLogger("websockets.server")
-        ws_server_log.setLevel(logging.INFO)
-        loggers = [
-            self.logger,
-            ws_log,
-            ws_proto_log,
-            ws_server_log
-        ]
         # Create formatter
-        fmt = logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s: %(module)s.%(funcName)s] %(message)s")
-        # Stream handler (STDOUT)
-        stream_handl = logging.StreamHandler()
-        stream_handl.setFormatter(fmt)
-        stream_handl.setLevel(logging.DEBUG)
-        self.logger.addHandler(stream_handl)
+        fmt = logging.Formatter(self.config.logging.format, style=self.config.logging.format_style)
+        # Handlers
+        handlers = []
+        # Stream handler
+        if self.config.logging.handlers.stream.enabled:
+            stream_handl = logging.StreamHandler(self.config.logging.handlers.stream.stream)
+            stream_handl.setFormatter(fmt)
+            stream_handl.setLevel(self.config.logging.handlers.stream.level)
+            handlers.append(stream_handl)
         # File hanlder (logs/base_station.log.<DATE>)
-        file_handl = logging.handlers.TimedRotatingFileHandler(
-            os.path.join("logs", "base_station.log"),
-            when="midnight"
-        )
-        file_handl.setFormatter(fmt)
-        file_handl.setLevel(logging.DEBUG)
-        self.logger.addHandler(file_handl)
-        # Add handlers to loggers
-        for logger in loggers:
-            logger.addHandler(stream_handl)
-            logger.addHandler(file_handl)
+        if self.config.logging.handlers.file.enabled:
+            if self.config.logging.handlers.file.rotate:
+                file_handl = logging.handlers.TimedRotatingFileHandler(
+                    self.config.logging.handlers.file.path,
+                    when=self.config.logging.handlers.file.rotate_when,
+                    interval=self.config.logging.handlers.file.rotate_interval
+                )
+            else:
+                file_handl = logging.FileHandler(self.config.logging.handlers.file.path)
+            file_handl.setFormatter(fmt)
+            file_handl.setLevel(self.config.logging.handlers.file.level)
+            handlers.append(file_handl)
+        # Create main logger and add handlers
+        self.logger = logging.getLogger(self.config.logging.main_logger.name)
+        self.logger.setLevel(self.config.logging.main_logger.level)
+        for handler in handlers:
+            self.logger.addHandler(handler)
+        # Get extra loggers an add handlers
+        for logger, level in self.config.logging.extra_loggers.items():
+            log = logging.getLogger(logger)
+            log.setLevel(level)
+            for handler in handlers:
+                log.addHandler(handler)
 
-        # User authentication "database"
-        try:
-            with open("rover_users.json", "r") as f:
-                self.users = json.load(f)
-        except FileNotFoundError:
-            self.logger.critical("Unable to open rover_users.json: file does not exist.")
-            raise SystemExit(1)
+        # Load user authentication "database"
+        if self.config.auth.require_auth:
+            try:
+                with open("rover_users.json", "r") as f:
+                    self.users = json.load(f)
+            except FileNotFoundError:
+                self.logger.critical("Unable to open rover_users.json: file does not exist.")
+                raise SystemExit(1)
 
         self.logger.info("Rover base station starting!")
 
@@ -145,21 +121,33 @@ class RoverBaseStation:
         :param path: The connection path, used to determine whether the connected client is a Driver or a Rover.
         :return: Whether the client was successfully registered
         """
-        # Authenticate client
-        auth = self.authenticate_client(sck)
-        if not auth:
-            return False
-        # TODO: check user groups
+        # Authenticate client if enabled
+        if self.config.auth.require_auth:
+            auth = self.authenticate_client(sck)
+            if not auth:
+                return False
+            # TODO: check user groups
         # Determine access mode
         if path == "/driver":
-            self.drivers.add(sck)
-            await self.log(f"New driver connected: {sck.remote_address[0]}")
-        elif path == "/rover":
-            self.rovers.add(sck)
-            if len(self.rovers) > 1:
-                await self.log(f"Rover connected while one was already connected: {sck.remote_address[0]}", "warning")
+            if self.config.auth.limit_drivers and len(self.drivers) < self.config.auth.limit_drivers:
+                self.drivers.add(sck)
+                await self.log(f"New driver connected: {sck.remote_address[0]}")
             else:
-                await self.log(f"Rover connected: {sck.remote_address[0]}")
+                await self.log(f"Driver tried to connect but too many drivers are connected: {sck.remote_address[0]}")
+                await sck.close(1008, "Too many drivers are connected")
+        elif path == "/rover":
+            if self.config.auth.limit_rovers and len(self.rovers) < self.config.auth.limit_rovers:
+                self.rovers.add(sck)
+                if len(self.rovers) > 1:
+                    await self.log(
+                        f"Rover connected while one was already connected: {sck.remote_address[0]}",
+                        "warning"
+                    )
+                else:
+                    await self.log(f"Rover connected: {sck.remote_address[0]}")
+            else:
+                await self.log(f"Rover tried to connect but too many rovers are connected: {sck.remote_address[0]}")
+                await sck.close(1008, "Too many rovers are connected")
         else:
             await self.log(f"Client tried to connect with invalid path: {sck.remote_address[0]}", "warning")
             await sck.close(1008, "Invalid path")
@@ -209,7 +197,16 @@ class RoverBaseStation:
                 "error"
             )
             return False
-        # Verify identity
+        # Check if user exists
+        if not auth_msg["username"] in self.users:
+            await sck.send(Msg.error(Error.auth_error, "Authentication failed"))
+            await self.log(
+                f"Client tried to authenticate with nonexistent username {auth_msg['username']}: "
+                f"{sck.remote_address[0]}",
+                "warning"
+            )
+            return False
+        # Check password
         user = self.users[auth_msg["username"]]
         if not bcrypt.checkpw(auth_msg["password"].encode("utf-8"), user["pw_hash"].encode("ascii")):
             await sck.send(Msg.error(Error.auth_error, "Authentication failed"))
@@ -218,9 +215,17 @@ class RoverBaseStation:
         return user["groups"]
 
     async def serve(self, sck: websockets.WebSocketServerProtocol, path: str):
+        """
+        Main entry point for WebSocket server.
+        :param sck: The socket to serve for
+        :param path: The path which the client connected to
+        :return:
+        """
+        # Attempt to register cleint, and close connection if failed
         if not await self.register_client(sck, path):
             return
 
+        # TODO: Refactor sensor data logging
         data_path: str = os.path.join("sensor_data", f"{datetime.date.today().isoformat()}.csv")
 
         need_header: bool
@@ -234,8 +239,9 @@ class RoverBaseStation:
 
         data_writer: t.Optional[csv.DictWriter] = None
         try:
-            async for msg_raw in sck:  # Continually receive messages
-                # Decode and verify message
+            # Continually receive messages
+            async for msg_raw in sck:
+                # Decode and verify message formatting
                 try:
                     msg = json.loads(msg_raw)
                 except json.JSONDecodeError:
@@ -248,7 +254,15 @@ class RoverBaseStation:
                     continue
 
                 if sck in self.drivers:
-                    if msg["type"] == "command":
+                    if msg["type"] == "auth":
+                        # Either already authenticated or authentication is not required
+                        if self.config.auth.require_auth:
+                            await sck.send(Msg.error(
+                                Error.auth_error,
+                                "Attempted to authenticate while already authenticated"
+                            ))
+                        # Ignore auth message if not required
+                    elif msg["type"] == "command":
                         # Store command id to route response later
                         if msg["id"] in self.command_ids:
                             await sck.send(Msg.error(Error.id_in_use, "The given command ID is already in use"))

@@ -1,0 +1,48 @@
+# Server configuration options
+[server]
+#host = "localhost"  # The host address to bind to
+port = 11571  # The port to bind to
+
+# Security options
+[wss]
+enabled = false  # Enables Secure WebSockets
+#chain_path = "/etc/letsencrypt/live/team1157.org/fullchain.pem"  # Path to certificate chain
+#privkey_path = "/etc/letsencrypt/live/team1157.org/privkey.pem"  # Path to private key
+
+# Authentication
+[auth]
+require_auth = true
+userbase_path = "rover_users.json"  # Path to userbase file
+#limit_drivers = 3  # Maximum number of drivers that can connect at once
+#limit_rovers = 1  # Maximum number of rovers that can connect at once
+
+# Logging options
+[logging]
+format = "{asctime} [{levelname}] [{name}: {module}.{funcName}] {message}"  # Format that the logger prints info in
+format_style = "{"  # The "style" the format is specified in ("%", "{", or "$")
+
+  # Main logger used for base station logs w/ level to display
+  [logging.main_logger]
+  name = "base_station"
+  level = "debug"
+
+  # Other loggers to include in logs w/ level to display
+  [logging.extra_loggers]
+  websockets = "info"
+  "websockets.protocol" = "info"
+  "websockets.server" = "info"
+
+  # Output handler configuration
+  [logging.handlers]
+    [logging.handlers.stream]
+    enabled = true
+    level = "debug"
+    stream = "stderr"
+
+    [logging.handlers.file]
+    enabled = true
+    level = "debug"
+    path = "logs/base_station.log"
+    rotate = true
+    rotate_when = "midnight"
+    rotate_interval = 1
