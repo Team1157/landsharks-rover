@@ -7,20 +7,34 @@
 
   <link rel="stylesheet" href="stylesheet.css">
 
+  <link rel="stylesheet" type="text/css" href="flight_indicators_plugin/css/flightindicators.css" />
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="flight_indicators_plugin/js/jquery.flightindicators.js"></script>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+    integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+    crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+    integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+    crossorigin=""></script>
+  <script src="https://unpkg.com/esri-leaflet@2.5.0/dist/esri-leaflet.js"
+    integrity="sha512-ucw7Grpc+iEQZa711gcjgMBnmd9qju1CICsRaryvX7HJklK0pGl/prxKvtHwpgm5ZHdvAil7YPxI1oWPOWK3UQ=="
+    crossorigin=""></script>
+
 </head>
 
 <body>
   <div id="wrapper">
   <div id="sidebarleft">
     <div id="commandqueue">
-      <h1>Command Que</h1>
+      <h1>Command Queue</h1>
     </div>
     <div id="console">
+      <div id="consolelines">
+      </div>
       <div id="consoleprompt">></div>
       <div id="consoleinput">
         <input type="text">
-      </div>
-      <div id="consolelines">
       </div>
     </div>
   </div>
@@ -70,6 +84,9 @@
       <p id="noBaseMessage">[Disconnected from base station]</p>
       <p id="noRoverMessage" style="display: none">[Rover not connected]</p>
       <div id="roverUI" style="display: none">
+        <img class="stream" src="images/camera%20placeholder.png">
+        <div id="mapid"></div>
+        <span id="attitude"></span>
         <img class="compass" src="images/compass.png" id="compass">
       </div>
     </div>
