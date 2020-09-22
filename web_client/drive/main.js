@@ -4,6 +4,9 @@ let connectedDrivers = [];
 
 let consoleLines = [];
 
+let attitude_indicator;
+let minimap;
+
 function updateConsole() {
     let consoleDiv = document.getElementById("consolelines");
     while (consoleDiv.firstChild) {
@@ -15,10 +18,14 @@ function updateConsole() {
         newParagraph.append(newNode);
         consoleDiv.append(newParagraph)
     });
+    while (document.getElementById("consolelines").clientHeight + document.getElementById("consoleprompt").clientHeight > document.getElementById("console").clientHeight) {
+        consoleDiv.removeChild(consoleDiv.firstChild);
+        consoleLines.shift();
+    }
 }
 
 function writeToConsole(message) {
-    consoleLines.unshift(message);
+    consoleLines.push(message);
     updateConsole();
 }
 
@@ -95,10 +102,41 @@ function initUi() {
         let keyCode = e.which;
         if (keyCode === 13){
           // Enter pressed
-          writeToConsole(this.value);
+          writeToConsole(">" + this.value);
           this.value = '';
         }
-    }
+    };
+
+    minimap = new L.map('mapid', {
+        zoom: 17,
+        minZoom: 10,
+        center: new L.LatLng(39.118928, -108.499376),
+        attributionControl: false
+    });
+    L.esri.basemapLayer('Imagery').addTo(minimap);
+    L.control.scale().addTo(minimap);
+    minimap.dragging.disable();
+    minimap.touchZoom.disable();
+    minimap.doubleClickZoom.disable();
+    minimap.scrollWheelZoom.disable();
+    minimap.boxZoom.disable();
+    minimap.keyboard.disable();
+    document.getElementById('mapid').style.cursor='default';
+    minimap.on("zoom", function (e) {
+        minimap.panTo(new L.LatLng(39.118928, -108.499376));
+    });
+
+    let xmlhttp = new XMLHttpRequest();
+    xmlhttp.onreadystatechange = function() {
+      if (this.readyState === 4 && this.status === 200) {
+        L.geoJSON(JSON.parse(this.responseText), {style: {color: "#ff0000", fillOpacity: 0}}).addTo(minimap);
+      }
+    };
+    xmlhttp.open("GET", "assets/ohv_boundaries.geojson", true);
+    xmlhttp.send();
+
+    attitude_indicator = $.flightIndicator('#attitude', 'attitude', {size: 200, showBox: false, img_directory: "flight_indicators_plugin/img/"});
+
 }
 
 function onSocketReady() {
@@ -134,6 +172,7 @@ function verifyMsg(message) {
 
 function onMessage(event) {
     let rawMessage = event.data;
+    log("Received message: " + rawMessage, "debug", false);
     try {
         let msg = JSON.parse(rawMessage);
         if (!verifyMsg(msg)) {
@@ -157,10 +196,16 @@ function onMessage(event) {
                         if (typeof clients === "object" && clients["rovers"] !== undefined && clients["drivers"] !== undefined) {
                             connectedRovers = clients["rovers"];
                             connectedDrivers = clients["drivers"];
+                            connectedRovers = ["DEBUG ROVER"]; //TODO remove this
                             document.getElementById("noBaseMessage").style.display = "none";
-                            if (connectedRovers.size > 0) {
+                            if (connectedRovers.length > 0) {
                                 document.getElementById("noRoverMessage").style.display = "none";
-                                document.getElementById("roverUI").style.display = "block";
+                                if (document.getElementById("roverUI").style.display === "none") {
+                                    document.getElementById("roverUI").style.display = "block";
+                                    minimap.invalidateSize();
+                                } else {
+                                    document.getElementById("roverUI").style.display = "block";
+                                }
                             } else {
                                 document.getElementById("noRoverMessage").style.display = "block";
                                 document.getElementById("roverUI").style.display = "none";
@@ -228,4 +273,13 @@ window.addEventListener("DOMContentLoaded", function() {
     initUi();
     connect();
     sendQueries();
+
+    let increment = 0;
+    setInterval(function() {
+        // Attitude update
+        attitude_indicator.setRoll(30*Math.sin(increment/10));
+        attitude_indicator.setPitch(50*Math.sin(increment/20));
+
+        increment++;
+    }, 50);
 }, false);
