@@ -167,10 +167,16 @@ class Msg:
             return _chk_types(message, {
                 "values": dict
             })
-        elif message["type"] == "digest":
-            return _chk_types(message, {
+        elif message["type"] == "sensors":
+            if not _chk_types(message, {
+                "time": int,
                 "sensors": dict
-            })
+            }):
+                return False
+            for k, v in message["sensors"].items():
+                if type(k) is not str or type(v) not in (float, int, str, bool):
+                    return False
+            return True
         elif message["type"] == "auth":
             return _chk_types(message, {
                 "username": str,

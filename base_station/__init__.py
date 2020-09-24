@@ -1,13 +1,11 @@
 import asyncio
-import csv
 import json
-import os
 import websockets
 import typing as t
 import logging
 import logging.handlers
-import datetime
 import bcrypt
+import influxdb
 from common import Msg, Error
 from base_station.config import Config
 from base_station.util import LOG_LEVELS, flatten_dict
@@ -17,6 +15,7 @@ class RoverBaseStation:
     def __init__(self, _config: Config):
         self.config = _config
 
+        # Rovers and drivers collections
         self.drivers: t.Set[websockets.WebSocketServerProtocol] = set()
         self.rovers: t.Set[websockets.WebSocketServerProtocol] = set()
 
@@ -36,7 +35,7 @@ class RoverBaseStation:
             stream_handl.setFormatter(fmt)
             stream_handl.setLevel(self.config.logging.handlers.stream.level)
             handlers.append(stream_handl)
-        # File hanlder (logs/base_station.log.<DATE>)
+        # File hanlder
         if self.config.logging.handlers.file.enabled:
             if self.config.logging.handlers.file.rotate:
                 file_handl = logging.handlers.TimedRotatingFileHandler(
@@ -69,6 +68,16 @@ class RoverBaseStation:
             except FileNotFoundError:
                 self.logger.critical("Unable to open rover_users.json: file does not exist.")
                 raise SystemExit(1)
+
+        # Connect to InfluxDB
+        if self.config.data.enabled:
+            self.influx = influxdb.InfluxDBClient(
+                host=self.config.data.influx_host,
+                port=self.config.data.influx_port,
+                username=self.config.data.influx_user,
+                password=self.config.data.influx_pass,
+                database=self.config.data.influx_db
+            )
 
         self.logger.info("Rover base station starting!")
 
@@ -225,19 +234,6 @@ class RoverBaseStation:
         if not await self.register_client(sck, path):
             return
 
-        # TODO: Refactor sensor data logging
-        data_path: str = os.path.join("sensor_data", f"{datetime.date.today().isoformat()}.csv")
-
-        need_header: bool
-        data_file: t.TextIO
-        if os.path.exists(data_path):
-            data_file = open(data_path, "a", newline='')
-            need_header = False
-        else:
-            data_file = open(data_path, "w", newline='')
-            need_header = True
-
-        data_writer: t.Optional[csv.DictWriter] = None
         try:
             # Continually receive messages
             async for msg_raw in sck:
@@ -349,24 +345,16 @@ class RoverBaseStation:
                     elif msg["type"] == "option_response":
                         await self.log(f"Option response from {sck.remote_address[0]}: {msg['values']!r}")
                         await self.broadcast_drivers(msg)
-                    elif msg["type"] == "digest":
-                        flattened_data = flatten_dict(msg)
-                        flattened_data["time_stamp"] = datetime.datetime.now().isoformat()
-                        new_path = os.path.join("base_station", "sensor_data",
-                                                f"{datetime.date.today().isoformat()}.csv")
-                        if data_path != new_path:
-                            # Switch data files
-                            data_file.close()
-                            data_path = new_path
-                            data_file = open(data_path, "w", newline='')
-                            need_header = True
-                            data_writer = None
-                        if data_writer is None:
-                            data_writer = csv.DictWriter(data_file, fieldnames=flattened_data.keys())
-                        if need_header:
-                            data_writer.writeheader()
-                            need_header = False
-                        data_writer.writerow(flattened_data)
+                    elif msg["type"] == "sensors":
+                        if self.config.data.enabled:
+                            points = [
+                                {
+                                    "measurement": meas,
+                                    "time": msg["time"],
+                                    "fields": fields
+                                } for meas, fields in msg["sensors"].values
+                            ]
+                            self.influx.write_points(points)
                         await self.broadcast_drivers(msg)
                     elif msg["type"] == "log":
                         # Route log to drivers
@@ -384,5 +372,4 @@ class RoverBaseStation:
             # Send exception to drivers
             await self.log("Base station error: " + repr(e), "critical")
         finally:
-            data_file.close()
             await self.unregister_client(sck)

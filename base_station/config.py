@@ -16,6 +16,7 @@ class Config:
         self.server = ServerSection(cfg.get("server") or {})
         self.wss = WssSection(cfg.get("wss") or {})
         self.auth = AuthSection(cfg.get("auth") or {})
+        self.data = DataSection(cfg.get("data") or {})
         self.logging = LoggingSection(cfg.get("logging") or {})
 
 
@@ -40,6 +41,16 @@ class AuthSection:
         self.userbase_path: str = cfg.get("userbase_path") or "rover_users.json"
         self.limit_drivers: int = cfg.get("limit_drivers") or None
         self.limit_rovers: int = cfg.get("limit_rovers") or None
+
+
+class DataSection:
+    def __init__(self, cfg: dict):
+        self.enabled: bool = cfg.get("enabled") or False
+        self.influx_host: str = cfg.get("influx_host") or "localhost"
+        self.influx_port: int = cfg.get("influx_post") or 8086
+        self.influx_user: str = cfg.get("influx_user") or "root"
+        self.influx_pass: str = cfg.get("influx_port") or "root"
+        self.influx_db: str = cfg.get("influx_db") or "landsharks_rover"
 
 
 class LoggingSection:

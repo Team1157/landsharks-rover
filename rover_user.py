@@ -3,7 +3,6 @@ Command-line utility for managing rover users
 """
 
 import click
-import sys
 import os
 import json
 from getpass import getpass
@@ -32,7 +31,7 @@ def rover_user(ctx, filename):
     # Exit if malformed JSON
     except json.JSONDecodeError:
         click.echo("Unable to open userbase file: file contains malformed JSON", err=True)
-        sys.exit(1)
+        raise SystemExit(1)
 
 
 def store_userbase(ctx):
@@ -43,7 +42,7 @@ def store_userbase(ctx):
     # Exit if can't open file
     except PermissionError:
         click.echo(f"Unable to write userbase file: permission error", err=True)
-        sys.exit(1)
+        raise SystemExit(1)
 
 
 @rover_user.command()
@@ -56,7 +55,7 @@ def add(ctx, username):
     # Exit if user exists
     if username in ctx.obj["users"]:
         click.echo(f"Unable to add user: user {username} exists", err=True)
-        sys.exit(1)
+        raise SystemExit(1)
     # Create user stub
     ctx.obj["users"][username] = {
         "pw_hash": "",
@@ -76,7 +75,7 @@ def remove(ctx, username):
     # Exit if user does not exist
     if username not in ctx.obj["users"]:
         click.echo(f"Unable to remove user: user {username} does not exist", err=True)
-        sys.exit(1)
+        raise SystemExit(1)
     # Delete user
     del ctx.obj["users"][username]
     # Store modified userbase
@@ -103,7 +102,7 @@ def change_password(ctx, username):
     # Exit if user does not exist
     if username not in ctx.obj["users"]:
         click.echo(f"Unable to change user password: user {username} does not exist", err=True)
-        sys.exit(1)
+        raise SystemExit(1)
     # Get new password, encode into bytes as utf-8
     pw = getpass(f"New password for user {username}: ").encode("utf-8")
     # Hash password, reencode to ASCII so json doesn't complain (bcrypt shouldn't output any non-ASCII data)
@@ -123,7 +122,7 @@ def add_groups(ctx, username, groups):
     # Exit if user does not exist
     if username not in ctx.obj["users"]:
         click.echo(f"Unable to add user groups: user {username} does not exist", err=True)
-        sys.exit(1)
+        raise SystemExit(1)
     # Add groups
     ctx.obj["users"][username]["groups"] = list(set(ctx.obj["users"][username]["groups"]).union(set(groups)))
     # Store modified userbase
@@ -140,7 +139,7 @@ def remove_groups(ctx, username, groups):
     """
     if username not in ctx.obj["users"]:
         click.echo(f"Unable to remove user groups: user {username} does not exist", err=True)
-        sys.exit(1)
+        raise SystemExit(1)
     # Remove groups
     for group in groups:
         ctx.obj["users"][username]["groups"].pop(group)
@@ -158,7 +157,7 @@ def list_groups(ctx, username):
     # Exit if user does not exist
     if username not in ctx.obj["users"]:
         click.echo(f"Unable to list user groups: user {username} does not exist", err=True)
-        sys.exit(1)
+        raise SystemExit(1)
     # List groups
     click.echo(", ".join(ctx.obj["users"][username]["groups"]))
 

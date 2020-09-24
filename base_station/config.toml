@@ -11,10 +11,19 @@ enabled = false  # Enables Secure WebSockets
 
 # Authentication
 [auth]
-require_auth = true
+require_auth = false
 userbase_path = "rover_users.json"  # Path to userbase file
 #limit_drivers = 3  # Maximum number of drivers that can connect at once
 #limit_rovers = 1  # Maximum number of rovers that can connect at once
+
+# Data logging with InfluxDB
+[data]
+enabled = true
+influx_host = "localhost"
+influx_port = 8086
+#influx_user = ""
+#influx_pass = ""
+influx_db = "landsharks-rover"
 
 # Logging options
 [logging]

@@ -105,7 +105,7 @@ Response: `"option_response"`
         "camera_framerate"
     ],
     "set": { // Any options to set
-        "digest_interval": 1
+        "sensors_interval": 1
     }
 }
 ```
@@ -118,21 +118,21 @@ Response: none
     "type": "option_response",
     "values": { // The values of all options set and get
         "camera_framerate": 5,
-        "digest_interval": 1 // May be different from set value if invalid
+        "sensors_interval": 1 // May be different from set value if invalid
     }
 }
 ```
 
-#### `"digest"`: Reports sensor values
+#### `"sensors"`: Reports sensor values
 Driver ← Base ← Rover  
 Response: none
 ```js
-// Every sensor must be reported everytime, but can report null
 {
-    "type": "digest",
+    "type": "sensors",
+    "time": 1600896055730369100, // Unix timestamp, in nanoseconds
     "sensors": { // The values of each sensor reported
-        "imu": {
-            "x_accel": 3.2,
+        "imu": { // The measurement of a specific sensor (passed to Influx as a measurement)
+            "x_accel": 3.2, // A specific value of the sensor (passed to Influx as a field)
             ... 
         },
         "humidity": ... 
@@ -195,7 +195,7 @@ Response: none if successful, disconnect if unsuccessful
 ### Periodic messages 
 These messages are sent automatically with a frequency configurable with the options message.
 - `"status"` (Base ← Rover)
-- `"digest"` (Base ← Rover)
+- `"sensors"` (Base ← Rover)
 - `"queue_status"` (Driver ← Base)
 
 ## On-rover protocol (Raspberry Pi ↔ Arduino)

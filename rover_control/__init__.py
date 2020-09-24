@@ -94,6 +94,7 @@ class LandsharksRover:
 
 
 def collect_sensors():
+    _dummy = 0.0
     # Get various pi stat values
     ram = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
@@ -101,7 +102,7 @@ def collect_sensors():
     if "sensors_temperatures" in psutil.__all__:
         cpu_temp = psutil.sensors_temperatures()["coretemp"][0].current
     else:
-        cpu_temp = 0.0  # dummy value
+        cpu_temp = _dummy
     this_proc = psutil.Process(os.getpid())
     return {
         "pi": {
@@ -112,6 +113,26 @@ def collect_sensors():
             "disk_percent": disk.percent,
             "disk_free": disk.free,
             "ctl_ram_used": this_proc.memory_full_info().uss
+        },
+        "gps": {
+            "latitude": _dummy,
+            "longitude": _dummy,
+            "satellites": _dummy
+        },
+        "imu": {
+            "gyro_x": _dummy,
+            "gyro_y": _dummy,
+            "gyro_z": _dummy,
+            "acc_x": _dummy,
+            "acc_y": _dummy,
+            "acc_z": _dummy,
+            "mag_x": _dummy,
+            "mag_y": _dummy,
+            "mag_z": _dummy
+        },
+        "battery": {
+            "voltage": _dummy,
+            "current": _dummy
         }
     }
 
@@ -199,35 +220,6 @@ async def camera_begin_stream():
 async def camera_end_stream():
     """
     Ends the current livestream if it is running
-    :return:
-    """
-    pass
-
-
-@LandsharksRover.register_command
-async def ssh_open_tunnel(*,
-                          host: str = "1157.org", host_port: int = 22,
-                          local_port: int = 22, remote_port: int = 11572):
-    """
-    Opens an SSH tunnel, by default opening a remote shell via the base station server
-    :param host: The remote machine to tunnel
-    :param host_port: The SSH port on the host
-    :param local_port: The local (rover-side) port to tunnel to the host
-    :param remote_port: The port to expose the local port as on the host
-    :return:
-    """
-    p = await asyncio.create_subprocess_exec("ssh", [
-        "-N",  # Don't open shell, just tunnel
-        "-R", f"{remote_port}:127.0.0.1:{local_port}",  # Open reverse tunnel
-        f"{host}",  # Log into remote
-        "-p", f"{host_port}"
-    ])
-
-
-@LandsharksRover.register_command
-async def ssh_close_tunnel():
-    """
-    Closes an SSH tunnel, if one is open
     :return:
     """
     pass
