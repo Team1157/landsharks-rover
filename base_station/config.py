@@ -1,5 +1,5 @@
 """
-Contains helper classes and default value for the configuration file
+Contains helper classes and default values for the configuration file
 """
 import sys
 import typing as t

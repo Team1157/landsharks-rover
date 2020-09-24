@@ -138,14 +138,14 @@ class RoverBaseStation:
             # TODO: check user groups
         # Determine access mode
         if path == "/driver":
-            if self.config.auth.limit_drivers and len(self.drivers) < self.config.auth.limit_drivers:
+            if not self.config.auth.limit_drivers or len(self.drivers) < self.config.auth.limit_drivers:
                 self.drivers.add(sck)
                 await self.log(f"New driver connected: {sck.remote_address[0]}")
             else:
                 await self.log(f"Driver tried to connect but too many drivers are connected: {sck.remote_address[0]}")
                 await sck.close(1008, "Too many drivers are connected")
         elif path == "/rover":
-            if self.config.auth.limit_rovers and len(self.rovers) < self.config.auth.limit_rovers:
+            if not self.config.auth.limit_rovers or len(self.rovers) < self.config.auth.limit_rovers:
                 self.rovers.add(sck)
                 if len(self.rovers) > 1:
                     await self.log(
