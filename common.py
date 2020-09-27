@@ -16,6 +16,7 @@ class Error(Enum):
     id_in_use = "id_in_use"
     unknown_id = "unknown_id"
     auth_error = "auth_error"
+    too_many_clients = "too_many_clients"
 
 
 class Status(Enum):

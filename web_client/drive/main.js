@@ -239,7 +239,7 @@ function connect() {
         document.getElementById("noBaseMessage").style.display = "block";
         document.getElementById("noRoverMessage").style.display = "none";
         document.getElementById("roverUI").style.display = "none";
-        //Sleep 5 seconds
+        // Sleep 5 seconds
         await new Promise(r => setTimeout(r, 5000));
         connect();
     };
@@ -264,7 +264,7 @@ async function sendQueries() {
                 "query": "client_list"
             }))
         }
-        //Sleep 5 seconds
+        // Sleep 5 seconds
         await new Promise(r => setTimeout(r, 2000));
     }
 }
@@ -282,4 +282,8 @@ window.addEventListener("DOMContentLoaded", function() {
 
         increment++;
     }, 50);
+}, false);
+
+window.addEventListener("unload", function() {
+    socket.close();
 }, false);

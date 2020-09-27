@@ -13,8 +13,12 @@ enabled = false  # Enables Secure WebSockets
 [auth]
 require_auth = false
 userbase_path = "rover_users.json"  # Path to userbase file
-#limit_drivers = 3  # Maximum number of drivers that can connect at once
-#limit_rovers = 1  # Maximum number of rovers that can connect at once
+  [auth.paths]
+  "/driver" = "driver"
+  "/rover" = "rover"
+  [auth.limits]
+  #driver = 3  # Maximum number of drivers that can connect at once
+  #rover = 1  # Maximum number of rovers that can connect at once
 
 # Data logging with InfluxDB
 [data]

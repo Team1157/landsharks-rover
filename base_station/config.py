@@ -39,8 +39,8 @@ class AuthSection:
         if self.require_auth is None:
             self.require_auth = True
         self.userbase_path: str = cfg.get("userbase_path") or "rover_users.json"
-        self.limit_drivers: int = cfg.get("limit_drivers") or None
-        self.limit_rovers: int = cfg.get("limit_rovers") or None
+        self.paths: dict = cfg.get("paths") or {}
+        self.limits: dict = cfg.get("limits") or {}
 
 
 class DataSection:
