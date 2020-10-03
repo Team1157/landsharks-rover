@@ -4,8 +4,10 @@ let connectedDrivers = [];
 
 let consoleLines = [];
 
+let roverPos;
 let attitude_indicator;
 let minimap;
+let mapMarker;
 
 function updateConsole() {
     let consoleDiv = document.getElementById("consolelines");
@@ -107,10 +109,13 @@ function initUi() {
         }
     };
 
+    //TODO: Remove
+    roverPos = new L.LatLng(39.118928, -108.499376)
+
     minimap = new L.map('mapid', {
         zoom: 17,
         minZoom: 10,
-        center: new L.LatLng(39.118928, -108.499376),
+        center: roverPos,
         attributionControl: false
     });
     L.esri.basemapLayer('Imagery').addTo(minimap);
@@ -123,8 +128,15 @@ function initUi() {
     minimap.keyboard.disable();
     document.getElementById('mapid').style.cursor='default';
     minimap.on("zoom", function (e) {
-        minimap.panTo(new L.LatLng(39.118928, -108.499376));
+        minimap.panTo(roverPos);
     });
+
+    let markerIcon = L.icon({
+        iconUrl: "images/map_marker.svg",
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+    })
+    mapMarker = L.marker(roverPos, {icon: markerIcon, rotationAngle: 180}).addTo(minimap);
 
     let xmlhttp = new XMLHttpRequest();
     xmlhttp.onreadystatechange = function() {
@@ -135,7 +147,7 @@ function initUi() {
     xmlhttp.open("GET", "assets/ohv_boundaries.geojson", true);
     xmlhttp.send();
 
-    attitude_indicator = $.flightIndicator('#attitude', 'attitude', {size: 200, showBox: false, img_directory: "flight_indicators_plugin/img/"});
+    attitude_indicator = $.flightIndicator('#attitude', 'attitude', {size: 200, showBox: false, img_directory: "libraries/flight_indicators_plugin/img/"});
 
 }
 
@@ -279,6 +291,7 @@ window.addEventListener("DOMContentLoaded", function() {
         // Attitude update
         attitude_indicator.setRoll(30*Math.sin(increment/10));
         attitude_indicator.setPitch(50*Math.sin(increment/20));
+        mapMarker.setRotationAngle(180 * Math.sin(increment/10));
 
         increment++;
     }, 50);
