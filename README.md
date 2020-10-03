@@ -21,7 +21,7 @@ Response: none
 
 #### `"command"`: Runs a command
 Driver → Base → Rover  
-Response: `"command_response"`
+Response: `Driver → Base: "queue_status", Base → Rover: "command_response" (after delay)`
 ```js
 {
     "type": "command",
