@@ -174,20 +174,15 @@ class RoverBaseStation:
             return None
         # Error if first message is not of type `auth`
         if not auth_msg["type"] == "auth":
-            await self.log(
-                f"Expected `auth` message but received `{auth_msg['type']}` from {sck.remote_address[0]}",
-                "error"
-            )
+            await self.log(f"Expected `auth` message but received `{auth_msg['type']}` from {sck.remote_address[0]}",
+                           "error")
             await sck.send(Msg.error(Error.auth_error, "Expected an auth message"))
             await sck.close(1008, "Expected an auth message on first message")
             return None
         # Check if user exists
         if not auth_msg["username"] in self.users:
-            await self.log(
-                f"Client tried to authenticate with nonexistent username '{auth_msg['username']}': "
-                f"{sck.remote_address[0]}",
-                "warning"
-            )
+            await self.log(f"Client tried to authenticate with nonexistent username "
+                           f"'{auth_msg['username']}': {sck.remote_address[0]}", "warning")
             # Don't say "incorrect user" so attackers don't know if they have a valid username or not
             await sck.send(Msg.error(Error.auth_error, "Authentication failed"))
             await sck.close(1008, "Authentication failed")
@@ -209,15 +204,13 @@ class RoverBaseStation:
         :return:
         """
         if sck in self.clients:
-            await self.log(
-                f"Client disconnected with code {sck.close_code}: {self.clients.get_role(sck)}:{sck.remote_address[0]}"
-            )
+            await self.log(f"Client disconnected with code {sck.close_code}: "
+                           f"{self.clients.get_role(sck)}:{sck.remote_address[0]}",
+                           "info" if sck.close_code <= 1001 else "warning")
             self.clients.remove(sck)
         else:
-            await self.log(
-                f"Client disconnected with code {sck.close_code} which was never registered: {sck.remote_address[0]}",
-                "warning"
-            )
+            await self.log(f"Client disconnected with code {sck.close_code} "
+                           f"which was never registered: {sck.remote_address[0]}", "warning")
 
     async def serve(self, sck: websockets.WebSocketServerProtocol, path: str):
         """
@@ -252,26 +245,25 @@ class RoverBaseStation:
                 except Exception as e:
                     # self.logger.exception(e)
                     # Send exception to drivers
-                    await self.log(f"Base station error: {e!r}", "critical")
+                    await self.log(f"Base station error: {e!r}", "error")
 
-            # Connection closes with OK when look exits normally
+            # Loop exits normally when connection closes with OK
             await self.unregister_client(sck)
 
-        # Unregister clients when they disconnect
+        # Unregister clients when they disconnect abnormally (not exit code 1000 or 1001)
         except websockets.ConnectionClosed:
             await self.unregister_client(sck)
 
-    # Message handlers
+    # Util function for limiting role access to message handler
     async def _limit_role(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str, required_role: str):
         if role != required_role:
             await sck.send(Msg.error(Error.invalid_message, "Message type not allowed with role"))
-            await self.log(
-                f"Non-driver client {role}:{sck.remote_address[0]} sent message with type {msg['type']}",
-                "warning"
-            )
+            await self.log(f"Non-driver client {role}:{sck.remote_address[0]} sent message with type {msg['type']}",
+                           "warning")
             return False
         return True
 
+    # Message handlers
     async def _log(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
         await self.log(f"Client {role}:{sck.remote_address[0]} logged: {msg['message']}", msg["level"])
 
@@ -286,10 +278,8 @@ class RoverBaseStation:
         # Put the command in the command queue
         self.command_queue.append(msg)
         # Log command
-        await self.log(
-            f"{sck.remote_address} sent command {msg['command']} (#{msg['id']}) "
-            f"with parameters {msg['parameters']} (#{len(self.command_queue)} in queue)"
-        )
+        await self.log(f"{sck.remote_address} sent command {msg['command']} (#{msg['id']}) "
+                       f"with parameters {msg['parameters']} (#{len(self.command_queue)} in queue)")
 
     async def _command_response(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
         if not await self._limit_role(sck, msg, role, "rover"):
@@ -310,8 +300,7 @@ class RoverBaseStation:
         # May cause issues if more than 1 rover is connected, which shouldn't ever be the case
         if self.current_command is None or msg["id"] != self.current_command["id"]:
             await self.log(f"Command response received from {sck.remote_address[0]} "
-                           f"that does not match the running command",
-                           "warning")
+                           f"that does not match the running command", "warning")
         del self.command_ids[msg["id"]]
         self.current_command = None
 
@@ -329,8 +318,8 @@ class RoverBaseStation:
                                f"with parameters {next_command['parameters']!r}")
                 self.current_command = next_command
         else:
-            await self.log(f"Status message received from {sck.remote_address[0]} with an unknown "
-                           f"status: {status}", "error")
+            await self.log(f"Status message received from {sck.remote_address[0]} with an "
+                           f"unknown status: {status}", "error")
 
     async def _clear_queue(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
         if not await self._limit_role(sck, msg, role, "driver"):
