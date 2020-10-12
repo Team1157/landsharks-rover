@@ -34,7 +34,7 @@ class RoverBaseStation:
             stream_handl.setFormatter(fmt)
             stream_handl.setLevel(self.config.logging.handlers.stream.level)
             handlers.append(stream_handl)
-        # File hanlder
+        # File handler
         if self.config.logging.handlers.file.enabled:
             if self.config.logging.handlers.file.rotate:
                 file_handl = logging.handlers.TimedRotatingFileHandler(
