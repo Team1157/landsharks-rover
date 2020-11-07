@@ -102,9 +102,13 @@ function initUi() {
     let consoleInput = document.getElementById("consoleinput").children.item(0);
     consoleInput.onkeypress = function(e) {
         let keyCode = e.which;
-        if (keyCode === 13){
+        if (!socket) {
+            this.value = '';
+        }
+        else if (keyCode === 13) {
           // Enter pressed
-          writeToConsole(">" + this.value);
+          writeToConsole("> " + this.value);
+          socket.send(this.value);
           this.value = '';
         }
     };

@@ -6,8 +6,8 @@ port = 11571  # The port to bind to
 # Security options
 [wss]
 enabled = false  # Enables Secure WebSockets
-#chain_path = "/etc/letsencrypt/live/team1157.org/fullchain.pem"  # Path to certificate chain
-#privkey_path = "/etc/letsencrypt/live/team1157.org/privkey.pem"  # Path to private key
+#chain_path = "/etc/letsencrypt/live/rover.team1157.org/fullchain.pem"  # Path to certificate chain
+#privkey_path = "/etc/letsencrypt/live/rover.team1157.org/privkey.pem"  # Path to private key
 
 # Authentication
 [auth]
@@ -41,7 +41,7 @@ format_style = "{"  # The "style" the format is specified in ("%", "{", or "$")
 
   # Other loggers to include in logs w/ level to display
   [logging.extra_loggers]
-  websockets = "info"
+  "websockets" = "info"
   "websockets.protocol" = "info"
   "websockets.server" = "info"
 
