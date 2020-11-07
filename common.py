@@ -3,6 +3,7 @@ Common components used in both rover and base station
 """
 import json
 from enum import Enum
+import typing as t
 
 
 class Error(Enum):
@@ -94,7 +95,7 @@ class Msg:
         })
 
     @staticmethod
-    def queue_status(current_command: dict, queued_commands: list) -> str:
+    def queue_status(current_command: t.Optional[dict], queued_commands: list) -> str:
         return json.dumps({
             "type": "queue_status",
             "current_command": current_command,
@@ -126,7 +127,7 @@ class Msg:
         if message["type"] == "command":
             return _chk_types(message, {
                 "type": str,
-                "id": int,
+                "id": (int, _nonetype),
                 "command": str,
                 "parameters": dict
             })

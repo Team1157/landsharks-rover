@@ -25,7 +25,7 @@ Response: `Driver → Base: "queue_status", Base → Rover: "command_response" (
 ```js
 {
     "type": "command",
-    "id": 17574336, // A unique ID used to match commands with responses
+    "id": 17574336, // A unique ID used to match commands with responses (always null Driver → Base)
     "command": "move", // The command to run
     "parameters": { // A dictionary of parameters, as defined by the command
         "distance": 1
@@ -174,7 +174,7 @@ Response: none
 
 #### `"e_stop"`: Stops all commands and clears queue
 Driver → Base → Rover  
-Response: `status`
+Response: `Driver → Base: "queue_status", Base → Rover: "status"`
 ```js
 {
     "type": "e_stop"
@@ -196,7 +196,6 @@ Response: none if successful, disconnect if unsuccessful
 These messages are sent automatically with a frequency configurable with the options message.
 - `"status"` (Base ← Rover)
 - `"sensors"` (Base ← Rover)
-- `"queue_status"` (Driver ← Base)
 
 ## On-rover protocol (Raspberry Pi ↔ Arduino)
 Serial-based protocol for communicating between RPi and Arduino.  

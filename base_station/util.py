@@ -14,30 +14,43 @@ LOG_LEVELS = {
 }
 
 
-class ClientsCollection:
-    def __init__(self, clients: t.Dict[str, t.Set[websockets.WebSocketServerProtocol]] = None):
-        if not clients:
-            clients = {}
-        self.clients = clients
+class Client:
+    def __init__(self, sck: websockets.WebSocketServerProtocol, username: t.Optional[str], role: str):
+        self.sck: websockets.WebSocketServerProtocol = sck
+        self.username: t.Optional[str] = username
+        self.role: str = role
 
-    def with_role(self, role: str) -> t.Set[websockets.WebSocketServerProtocol]:
+
+class ClientsCollection:
+    def __init__(self, clients: t.Set[Client] = None):
+        if not clients:
+            clients = set()
+        self.clients: t.Set[Client] = clients
+
+    def with_role(self, role: str) -> t.Set[Client]:
         if role not in self.clients:
             self.clients[role] = set()
         return self.clients[role]
 
-    def get_role(self, sck: websockets.WebSocketServerProtocol) -> t.Optional[str]:
+    def get_role(self, client: Client) -> t.Optional[str]:
         for role, clients in self.clients.items():
-            if sck in clients:
+            if client in clients:
                 return role
         return None
 
-    def add(self, sck: websockets.WebSocketServerProtocol, role: str):
-        self.with_role(role).add(sck)
+    def get_client(self, sck: websockets.WebSocketServerProtocol) -> t.Optional[Client]:
+        for client in self.all():
+            if sck == client.sck:
+                return client
+        return None
 
-    def remove(self, sck: websockets.WebSocketServerProtocol):
+    def add(self, client: Client, role: str):
+        self.with_role(role).add(client)
+
+    def remove(self, client: Client):
         for cl in self.clients.values():
-            if sck in cl:
-                cl.remove(sck)
+            if client in cl:
+                cl.remove(client)
 
     def all(self):
         cl = set()
@@ -55,4 +68,12 @@ class ClientsCollection:
         return len(self.all())
 
     def __contains__(self, item):
-        return item in self.all()
+        # item is a Client and is in the collection
+        if item in self.all():
+            return True
+
+        # Check if item is a socket and belongs to one of the clients
+        for client in self.all():
+            if item == client.sck:
+                return True
+        return False

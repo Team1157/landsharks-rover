@@ -8,7 +8,7 @@ import bcrypt
 import influxdb
 from common import Msg, Error
 from base_station.config import Config
-from base_station.util import LOG_LEVELS, ClientsCollection
+from base_station.util import LOG_LEVELS, Client, ClientsCollection
 
 
 class RoverBaseStation:
@@ -19,9 +19,9 @@ class RoverBaseStation:
         self.clients = ClientsCollection()
 
         # Command queue
-        self.command_ids: t.Dict[int, websockets.WebSocketServerProtocol] = {}
         self.command_queue: t.List[t.Dict[str, t.Any]] = []
         self.current_command: t.Optional[t.Dict[str, t.Any]] = None
+        self.next_command_id: int = 0
 
         # #  LOGGING CONFIGURATION  # #
         # Create formatter
@@ -90,9 +90,9 @@ class RoverBaseStation:
         if role:
             role_clients = self.clients.with_role(role)
             if role_clients:
-                await asyncio.wait([sck.send(message) for sck in role_clients])
+                await asyncio.wait([client.sck.send(message) for client in role_clients])
         elif self.clients:
-            await asyncio.wait([sck.send(message) for sck in self.clients])
+            await asyncio.wait([client.sck.send(message) for client in self.clients])
 
     async def log(self, message: str, level="info"):
         """
@@ -123,8 +123,9 @@ class RoverBaseStation:
             await sck.close(1008, "Invalid path")
             return False
         # Authenticate client if enabled
+        username = None
         if self.config.auth.require_auth:
-            groups = self.authenticate_client(sck)
+            groups, username = self.authenticate_client(sck)
             # Auth failed
             if groups is None:
                 return False  # Close message and reason was already sent
@@ -147,10 +148,11 @@ class RoverBaseStation:
 
         # Add client
         await self.log(f"Client connected: {role_connect}:{sck.remote_address[0]}")
-        self.clients.add(sck, role_connect)
+        self.clients.add(Client(sck, username), role_connect)
         return True
 
-    async def authenticate_client(self, sck: websockets.WebSocketServerProtocol):
+    async def authenticate_client(self, sck: websockets.WebSocketServerProtocol) -> \
+            t.Tuple[t.Optional[str], t.Optional[str]]:
         """
         Authenticates a client connection
         :param sck:
@@ -165,13 +167,13 @@ class RoverBaseStation:
             await self.log(f"Received message with malformed JSON from {sck.remote_address[0]}", "error")
             await sck.send(Msg.error(Error.json_parse_error, "Failed to parse message"))
             await sck.close(1002, "Invalid JSON on auth message")
-            return None
+            return None, None
         # Error if invalid message format
         if not Msg.verify(auth_msg):
             await self.log(f"Received invalid message from {sck.remote_address[0]}", "error")
             await sck.send(Msg.error(Error.invalid_message, "The message sent is invalid"))
             await sck.close(1002, "Invalid auth message")
-            return None
+            return None, None
         # Error if first message is not of type `auth`
         if not auth_msg["type"] == "auth":
             await self.log(
@@ -180,7 +182,7 @@ class RoverBaseStation:
             )
             await sck.send(Msg.error(Error.auth_error, "Expected an auth message"))
             await sck.close(1008, "Expected an auth message on first message")
-            return None
+            return None, None
         # Check if user exists
         if not auth_msg["username"] in self.users:
             await self.log(
@@ -191,7 +193,7 @@ class RoverBaseStation:
             # Don't say "incorrect user" so attackers don't know if they have a valid username or not
             await sck.send(Msg.error(Error.auth_error, "Authentication failed"))
             await sck.close(1008, "Authentication failed")
-            return None
+            return None, None
         # Check password
         user = self.users[auth_msg["username"]]
         if not bcrypt.checkpw(auth_msg["password"].encode("utf-8"), user["pw_hash"].encode("ascii")):
@@ -199,23 +201,25 @@ class RoverBaseStation:
                            f"but failed to authenticate: {sck.remote_address[0]}", "warning")
             await sck.send(Msg.error(Error.auth_error, "Authentication failed"))
             await sck.close(1008, "Authentication failed")
-            return None
-        return user["groups"]
+            return None, None
+        return user["groups"], auth_msg["username"]
 
-    async def unregister_client(self, sck: websockets.WebSocketServerProtocol):
+    async def unregister_client(self, client: Client):
         """
         Unregisters a client connection
         :param sck: The connection
         :return:
         """
-        if sck in self.clients:
+        if client in self.clients:
             await self.log(
-                f"Client disconnected with code {sck.close_code}: {self.clients.get_role(sck)}:{sck.remote_address[0]}"
+                f"Client disconnected with code {client.sck.close_code}: "
+                f"{self.clients.get_role(client)}:{client.sck.remote_address[0]}"
             )
-            self.clients.remove(sck)
+            self.clients.remove(client)
         else:
             await self.log(
-                f"Client disconnected with code {sck.close_code} which was never registered: {sck.remote_address[0]}",
+                f"Client disconnected with code {client.sck.close_code} which was never registered: "
+                f"{client.sck.remote_address[0]}",
                 "warning"
             )
 
@@ -228,6 +232,12 @@ class RoverBaseStation:
         """
         # Attempt to register client, exit if failed (connection is already closed)
         if not await self.register_client(sck, path):
+            return
+
+        client: Client = self.clients.get_client(sck)
+        if client is None:
+            await self.log(f"Socket was not registered: {sck.remote_address[0]}", "warning")
+            await sck.close(1008, "Registration failed")
             return
 
         try:
@@ -246,7 +256,7 @@ class RoverBaseStation:
                         await sck.send(Msg.error(Error.invalid_message, "The message sent is invalid"))
                         continue
 
-                    await self.handlers[msg["type"]](self, sck, msg, self.clients.get_role(sck))
+                    await self.handlers[msg["type"]](self, sck, msg, self.clients.get_role(client))
 
                 # Catch all exceptions within loop so connection doesn't get closed
                 except Exception as e:
@@ -255,11 +265,11 @@ class RoverBaseStation:
                     await self.log(f"Base station error: {e!r}", "critical")
 
             # Connection closes with OK when look exits normally
-            await self.unregister_client(sck)
+            await self.unregister_client(client)
 
         # Unregister clients when they disconnect
         except websockets.ConnectionClosed:
-            await self.unregister_client(sck)
+            await self.unregister_client(client)
 
     # Message handlers
     async def _limit_role(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str, required_role: str):
@@ -278,13 +288,14 @@ class RoverBaseStation:
     async def _command(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
         if not await self._limit_role(sck, msg, role, "driver"):
             return
-        # Store command id to route response later
-        if msg["id"] in self.command_ids:
-            await sck.send(Msg.error(Error.id_in_use, "The given command ID is already in use"))
-            return
-        self.command_ids[msg["id"]] = sck
+        # Assign the command an id
+        msg["id"] = self.next_command_id
+        self.next_command_id += 1
+        msg["owner"] = {"address": sck.remote_address, "username": } #TODO FINISH REMOVING command_ids
         # Put the command in the command queue
         self.command_queue.append(msg)
+        # Update drivers with the new queue
+        await self.broadcast(Msg.queue_status(self.current_command, self.command_queue), "driver")
         # Log command
         await self.log(
             f"{sck.remote_address} sent command {msg['command']} (#{msg['id']}) "
@@ -300,7 +311,8 @@ class RoverBaseStation:
             await self.log(f"Command response received from rover {sck.remote_address[0]} "
                            f"with invalid id", "error")
             return
-        await self.command_ids[msg["id"]].send(json.dumps(msg))
+        # Forward the message to connected drivers
+        await self.broadcast(json.dumps(msg), "driver")
         # Log (debug)
         await self.log(
             f"{sck.remote_address[0]} sent response (#{msg['id']}) to "
@@ -314,6 +326,8 @@ class RoverBaseStation:
                            "warning")
         del self.command_ids[msg["id"]]
         self.current_command = None
+        # Update the drivers with the new queue
+        await self.broadcast(Msg.queue_status(self.current_command, self.command_queue), "driver")
 
     async def _status(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
         if not await self._limit_role(sck, msg, role, "rover"):
@@ -393,6 +407,11 @@ class RoverBaseStation:
     async def _e_stop(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
         await self.broadcast(json.dumps(msg), "rover")
         await self.log(f"Client {role}:{sck.remote_address[0]} activated e-stop!", "warning")
+        while len(self.command_queue) > 0:
+            # Free up the ids of the removed commands
+            cmd = self.command_queue.pop(0)
+            del self.command_ids[cmd["id"]]
+        await self.broadcast(Msg.queue_status(self.current_command, self.command_queue), "driver")
 
     async def _auth(self, sck: websockets.WebSocketServerProtocol, _msg: dict, role: str):
         # Either already authenticated or authentication is not required
