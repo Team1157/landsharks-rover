@@ -1,5 +1,5 @@
-# Landsharks Rover
-This repository contains all of the code for the rover project. This readme defines several
+# Sandshark
+This repository contains all the code for the Landsharks rover project. This readme defines several
 protocols, file formats, and utility programs used in the project.
 
 ## Control Protocol (Driver Station ↔ Base Station ↔ Rover)
@@ -21,12 +21,12 @@ Response: none
 
 #### `"command"`: Runs a command
 Driver → Base → Rover  
-Response: `Driver → Base: "queue_status", Base → Rover: "command_response" (after delay)`
+Response: `Driver → Base: None, Base → Rover: "status", "command_response" (when finished)`
 ```js
 {
     "type": "command",
     "id": 17574336, // A unique ID used to match commands with responses (always null Driver → Base)
-    "command": "move", // The command to run
+    "command": "move", // The command to run. null cancels the running command
     "parameters": { // A dictionary of parameters, as defined by the command
         "distance": 1
     }
@@ -41,7 +41,7 @@ Response: none
     "type": "command_response",
     "id": 17574336, // The ID of the command that's being responded to
     "error": null // Error type or null if none
-    "contents: {} // Any other returned info from the command
+    "contents": {} // Any other returned info from the command
 }
 ```
 
@@ -56,44 +56,6 @@ Response: none
 }
 ```
 
-#### `"clear_queue"`: Cancels all commands in the queue
-Driver → Base  
-Response: `"queue_status"`
-```js
-{
-    "type": "clear_queue"
-}
-```
-
-#### `"queue_status"`: Returns all commands in the queue
-Driver ← Base  
-Response: none
-```js
-{
-    "type": "queue_status",
-    "current_command": { // The full message that initiated the running command
-        "type": "command",
-        "id": 14550083,
-        "command": "move_camera",
-        "parameters": {
-            "pan": 48.566,
-            "tilt": -21.093
-        }
-    },
-    "queued_commands": [ // The list of the commands in the queue
-        {
-            "type": "command",
-            "id": 17574336,
-            "command": "move",
-            "parameters": {
-                "distance": 1
-            }
-        },
-        ...
-    ]
-}
-```
-
 #### `"option"`: Sets or gets options
 Driver → Base → Rover  
 Response: `"option_response"`
@@ -102,10 +64,10 @@ Response: `"option_response"`
     // Both set and get are required, can be empty
     "type": "option",
     "get": [ // Any options to get
-        "camera_framerate"
+        "navcam.framerate"
     ],
     "set": { // Any options to set
-        "sensors_interval": 1
+        "imu.message_interval": 1
     }
 }
 ```
@@ -117,25 +79,22 @@ Response: none
 {
     "type": "option_response",
     "values": { // The values of all options set and get
-        "camera_framerate": 5,
-        "sensors_interval": 1 // May be different from set value if invalid
+        "navcam.framerate": 5,
+        "imu.message_interval": 1 // May be different from set value if invalid
     }
 }
 ```
 
-#### `"sensors"`: Reports sensor values
+#### `"measurement"`: Reports sensor values
 Driver ← Base ← Rover  
 Response: none
 ```js
 {
-    "type": "sensors",
+    "type": "sensor",
     "time": 1600896055730369100, // Unix timestamp, in nanoseconds
-    "sensors": { // The values of each sensor reported
-        "imu": { // The measurement of a specific sensor (passed to Influx as a measurement)
-            "x_accel": 3.2, // A specific value of the sensor (passed to Influx as a field)
-            ... 
-        },
-        "humidity": ... 
+    "measurements": { // The values of each sensor reported
+        "x_accel": 3.2, // A specific value of the sensor (passed to Influx as a field)
+        ...
     }
 }
 ```
@@ -161,18 +120,7 @@ Response: none
 }
 ```
 
-#### `"error"`: Reports error in protocol
-Driver ↔ Base ↔ Rover  
-Response: none
-```js
-{
-    "type": "error",
-    "error": "json_parse_error", // The error type
-    "message": "Received message with malformed JSON" // Human readable message to be displayed to the drivers
-}
-```
-
-#### `"e_stop"`: Stops all commands and clears queue
+#### `"e_stop"`: Stops all commands
 Driver → Base → Rover  
 Response: `Driver → Base: "queue_status", Base → Rover: "status"`
 ```js
@@ -183,12 +131,20 @@ Response: `Driver → Base: "queue_status", Base → Rover: "status"`
 
 #### `"auth"`: Handles authentication
 Driver → Base ← Rover  
-Response: none if successful, disconnect if unsuccessful
+Response: `"auth_response"`, disconnect if unsuccessful
 ```js
 {
     "type": "auth",
-    "user": "username",
-    "pass": "password" // Plaintext is OK over secure (WSS) connection
+    "token": 123456,
+}
+```
+
+#### `"auth_response"`: Handles authentication
+Driver ← Base → Rover  
+```js
+{
+    "type": "auth_response",
+    "success": true
 }
 ```
 
@@ -201,14 +157,14 @@ These messages are sent automatically with a frequency configurable with the opt
 Serial-based protocol for communicating between RPi and Arduino.  
 TODO: define protocol
 
-## User authentication "database": `rover_users.json`
+## User authentication "database": `users.json`
 This file contains hashed passwords and permission groups of all registered rover users.
 It is encoded in JSON format.
 ```js
 {
-    "<username>": { // Each user is a key on the root object of the JSON file
-        "pw_hash": "<bcrypt_hash>", // User's bcrypt hashed and salted password
-        "groups": [] // Any permission groups the user is in, such as "rover" or "driver"
+    1234567: { // User token
+        "username": "",
+        "groups": ["drivers"] // groups are "viewers", "drivers", "rovers"
     }
 }
 ```
@@ -218,7 +174,7 @@ script.
 python rover_user.py add <user>  # adds a user
 python rover_user.py remove <user>  # removes a user
 python rover_user.py list-users  # lists all registered users
-python rover_user.py change-password <user>  # changes a user's password
+python rover_user.py change-token <user>  # changes a user's token
 python rover_user.py add-groups <user> <groups>  # adds a user to one or more groups
 python rover_user.py remove-groups <user> <groups>  # removes a user from one or more groups
 python rover_user.py list-groups <user>  # lists the groups the user belongs to
