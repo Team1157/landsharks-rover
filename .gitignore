@@ -4,3 +4,6 @@ rover_users.json
 venv/
 __pycache__/
 *.pyc
+
+# Pycharm stuff
+.idea/

@@ -1,187 +1,192 @@
 """
 Common components used in both rover and base station
 """
-import json
 from enum import Enum
 import typing as t
 
-
-class Error(Enum):
-    """
-    An enum of the possible errors that can be sent by the rover and base station
-    """
-
-    json_parse_error = "json_parse_error"
-    command_invalid_parameters = "command_invalid_parameters"
-    invalid_message = "invalid_message"
-    id_in_use = "id_in_use"
-    unknown_id = "unknown_id"
-    auth_error = "auth_error"
-    too_many_clients = "too_many_clients"
+# noinspection PyUnresolvedReferences
+import serde.tags
+import serde.fields
+import websockets
 
 
-class Status(Enum):
-    """
-    The possible states that the rover can be in
-    """
-    idle = "idle"
-    busy = "busy"
+class Role(Enum):
+    DRIVER = 0
+    ROVER = 1
+
+    @classmethod
+    def from_path(cls, path: str) -> t.Optional["Role"]:
+        match path:
+            case "/driver":
+                return Role.DRIVER
+            case "/rover":
+                return Role.ROVER
+        return None
 
 
-def _chk_types(msg: dict, checklist: dict) -> bool:
-    """
-    For each key in checklist, checks that msg has that key and that its type is or is in checklist[key].
-    If checklist[key] is None, then just checks for key's presence but not its type
-    :param msg:
-    :param checklist:
-    :return:
-    """
-    for key, types in checklist.items():
-        if key not in msg:
-            return False
-        if types is not None:
-            if type(types) is tuple and type(msg[key]) not in types:
-                return False
-            elif type(msg[key]) is not types:
-                return False
-    return True
+class Tag(serde.tags.Internal):
+    def lookup_tag(self, variant):
+        # return getattr(getattr(variant, "Meta"), "tag_name", super().lookup_tag(variant))
+        return getattr(variant, "tag_name", super().lookup_tag(variant))
 
 
-class Msg:
-    """
-    Several utility functions for dealing with rover control messages
-    """
+# COMMANDS #
 
-    # Message builders
-    @staticmethod
-    def log(message: str, level: str) -> str:
-        return json.dumps({
-            "type": "log",
-            "message": message,
-            "level": level
-        })
 
-    @staticmethod
-    def error(err: Error, message: str) -> str:
-        return json.dumps({
-            "type": "error",
-            "error": err.value,
-            "message": message
-        })
+class Command(serde.Model):
+    class Meta:
+        abstract = True
+        tag = Tag(tag="type")
 
-    @staticmethod
-    def command(command: str, parameters: dict) -> str:
-        return json.dumps({
-            "type": "command",
-            "command": command,
-            "parameters": parameters
-        })
 
-    @staticmethod
-    def command_response(contents: dict = None, error: Error = None, id_: int = None) -> str:
-        return json.dumps({
-            "type": "command_response",
-            "id": id_,
-            "contents": (contents if contents is not None else {}),
-            "error": (error.value if error is not None else None)
-        })
+class MoveDistanceCommand(Command):
+    """Moves a specified distance at the specified speed while turning the specified angle over that distance"""
 
-    @staticmethod
-    def status(status: Status, current_command: int = None):
-        return json.dumps({
-            "type": "status",
-            "status": status.value,
-            "current_command": current_command
-        })
+    distance: serde.fields.Float
+    speed: serde.fields.Float
+    angle: serde.fields.Float
 
-    @staticmethod
-    def queue_status(current_command: t.Optional[dict], queued_commands: list) -> str:
-        return json.dumps({
-            "type": "queue_status",
-            "current_command": current_command,
-            "queued_commands": queued_commands
-        })
+    class Meta:
+        tag_name = "move_distance"
 
-    @staticmethod
-    def query_response(query: str, value) -> str:
-        return json.dumps({
-            "type": "query_response",
-            "query": query,
-            "value": value
-        })
 
-    # Other utils
-    @staticmethod
-    def verify(message: dict) -> bool:
-        """
-        Verifies that a message is valid
-        :param message: The message to verify
-        :return:
-        """
-        # NoneType reference for allowing a variable to be None
-        _nonetype = type(None)
-        # Always error if there is no "type" key
-        if "type" not in message:
-            return False
-        # Verify message types
-        if message["type"] == "command":
-            return _chk_types(message, {
-                "type": str,
-                "id": (int, _nonetype),
-                "command": str,
-                "parameters": dict
-            })
-        elif message["type"] == "clear_queue":
-            return True
-        elif message["type"] == "option":
-            return _chk_types(message, {
-                "set": dict,
-                "get": dict
-            })
-        elif message["type"] == "log":
-            return _chk_types(message, {
-                "message": str,
-                "level": str
-            })
-        elif message["type"] == "error":
-            return _chk_types(message, {
-                "error": str,
-                "message": str
-            })
-        elif message["type"] == "query":
-            return _chk_types(message, {
-                "query": str
-            })
-        elif message["type"] == "e_stop":
-            return True
-        elif message["type"] == "command_response":
-            return _chk_types(message, {
-                "id": int,
-                "error": (str, _nonetype),
-                "contents": dict
-            })
-        elif message["type"] == "status":
-            return _chk_types(message, {
-                "status": str,
-                "current_command": (int, _nonetype)
-            })
-        elif message["type"] == "option_response":
-            return _chk_types(message, {
-                "values": dict
-            })
-        elif message["type"] == "sensors":
-            if not _chk_types(message, {
-                "time": int,
-                "sensors": dict
-            }):
-                return False
-            for k, v in message["sensors"].items():
-                if type(k) is not str or type(v) not in (float, int, str, bool):
-                    return False
-            return True
-        elif message["type"] == "auth":
-            return _chk_types(message, {
-                "username": str,
-                "password": str
-            })
-        return False
+class MoveContinuousCommand(Command):
+    """Moves continuously at the specified speed while turning at specified angle"""
+
+    speed: serde.fields.Float
+    angle: serde.fields.Float
+
+    class Meta:
+        tag_name = "move_continuous"
+
+
+# MESSAGES #
+
+
+class Message(serde.Model):
+    """The base message type."""
+    tag_name = "__INVALID__"
+
+    class Meta:
+        abstract = True
+        tag = Tag(tag="type")
+
+
+class EStopMessage(Message):
+    """Emergency stop: immediately halts motors and cancels the current command"""
+    tag_name = "e_stop"
+
+
+class LogMessage(Message):
+    """Writes a human-readable message to the logger"""
+    tag_name = "log"
+
+    message: serde.fields.Str()
+    level: serde.fields.Str()
+
+
+class CommandMessage(Message):
+    """Sets the current command"""
+    tag_name = "command"
+
+    command: serde.fields.Nested(Command)
+
+
+class CommandEndedMessage(Message):
+    """Notifies that the current command has ended"""
+    tag_name = "command_ended"
+
+    command: serde.fields.Nested(Command)
+    completed: serde.fields.Bool()
+
+
+class CommandStatusMessage(Message):
+    """Notifies of the current running command"""
+    tag_name = "status"
+
+    command: serde.fields.Nested(Command)
+
+
+class AuthMessage(Message):
+    """Authenticates the current client to the base station"""
+    tag_name = "auth"
+
+    token: serde.fields.Str()
+
+
+class AuthResponseMessage(Message):
+    """Notifies whether authentication was successful or not"""
+    tag_name = "auth_response"
+
+    success: serde.fields.Bool()
+    user: serde.fields.Optional(serde.fields.Str())
+
+
+class OptionMessage(Message):
+    """Sets or gets options"""
+    tag_name = "option"
+
+    get: serde.fields.List()
+    set: serde.fields.Dict()
+
+
+class OptionResponseMessage(Message):
+    """Returns option values set or get"""
+    tag_name = "option_response"
+
+    values: serde.fields.Dict()
+
+
+class SensorDataMessage(Message):
+    """Reports a sensor reading"""
+    tag_name = "sensor_data"
+
+    time: serde.fields.Int()
+    sensor: serde.fields.Str()
+    measurements: serde.fields.Dict(key=serde.fields.Str)
+
+
+class QueryBaseMessage(Message):
+    """Retrieves a value from the base station"""
+    tag_name = "query_base"
+
+    query: serde.fields.Str()
+
+
+class QueryBaseResponseMessage(Message):
+    """Returns a requested value from the base station"""
+    tag_name = "query_base_response"
+
+    query: serde.fields.Str()
+    value: None
+
+
+# Extension method
+
+def send_msg(self: websockets.WebSocketCommonProtocol, msg: Message):
+    return self.send(msg.to_json())
+
+
+websockets.WebSocketCommonProtocol.send_msg = send_msg
+del send_msg
+
+
+__all__ = [
+    "Role",
+    "Command",
+    "MoveDistanceCommand",
+    "MoveContinuousCommand",
+    "Message",
+    "EStopMessage",
+    "LogMessage",
+    "CommandMessage",
+    "CommandEndedMessage",
+    "CommandStatusMessage",
+    "AuthMessage",
+    "AuthResponseMessage",
+    "OptionMessage",
+    "OptionResponseMessage",
+    "SensorDataMessage",
+    "QueryBaseMessage",
+    "QueryBaseResponseMessage"
+]

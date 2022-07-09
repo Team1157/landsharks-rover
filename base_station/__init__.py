@@ -1,14 +1,16 @@
 import asyncio
 import json
+
+import serde
 import websockets
 import typing as t
 import logging
 import logging.handlers
 import bcrypt
 import influxdb
-from common import Msg, Error
+from common import *
 from base_station.config import Config
-from base_station.util import LOG_LEVELS, Client, ClientsCollection
+from base_station.util import LOG_LEVELS, Client
 
 
 class RoverBaseStation:
@@ -16,12 +18,7 @@ class RoverBaseStation:
         self.config = _config
 
         # Clients collection
-        self.clients = ClientsCollection()
-
-        # Command queue
-        self.command_queue: t.List[t.Dict[str, t.Any]] = []
-        self.current_command: t.Optional[t.Dict[str, t.Any]] = None
-        self.next_command_id: int = 0
+        self.clients: t.Set[Client] = set()
 
         # #  LOGGING CONFIGURATION  # #
         # Create formatter
@@ -80,7 +77,7 @@ class RoverBaseStation:
 
         self.logger.info("Rover base station starting!")
 
-    async def broadcast(self, message: str, role: str = None):
+    async def broadcast(self, message: Message, role: t.Optional[Role] = None):
         """
         Send a message to multiple clients
         :param message: The message to send
@@ -88,11 +85,11 @@ class RoverBaseStation:
         :return:
         """
         if role:
-            role_clients = self.clients.with_role(role)
+            role_clients = {client for client in self.clients if client.role == role}
             if role_clients:
-                await asyncio.wait([client.sck.send(message) for client in role_clients])
+                await asyncio.wait([client.sck.send_msg(message) for client in role_clients])
         elif self.clients:
-            await asyncio.wait([client.sck.send(message) for client in self.clients])
+            await asyncio.wait([client.sck.send_msg(message) for client in self.clients])
 
     async def log(self, message: str, level="info"):
         """
@@ -106,148 +103,113 @@ class RoverBaseStation:
         else:
             self.logger.warning(f"Invalid logging level: {level}")
             self.logger.warning(message)
-        await self.broadcast(Msg.log(message, level), "driver")
+        await self.broadcast(LogMessage(message=message, level=level), Role.DRIVER)
 
-    async def register_client(self, sck: websockets.WebSocketServerProtocol, path: str) -> bool:
+    async def register_client(self, sck: websockets.WebSocketServerProtocol, path: str) -> t.Optional[Client]:
         """
         Registers a new client connection
         :param sck: The client connection
         :param path: The connection path, used to determine whether the connected client is a Driver or a Rover.
-        :return: Whether the client was successfully registered
+        :return: The client object created in registration
         """
         # Determine role client is connecting as
-        role_connect = self.config.auth.paths.get(path)
-        if not role_connect:
-            await self.log(f"Client tried to connect with invalid path: {sck.remote_address[0]}", "warning")
-            await sck.send(Msg.error(Error.auth_error, "Invalid connection path"))
+        role = Role.from_path(path)
+        if not role:
+            await self.log(f"Client {sck.remote_address[0]} tried to connect with invalid path: {path}", "warning")
+            await sck.send_msg(LogMessage(message="Invalid path", level="error"))
             await sck.close(1008, "Invalid path")
-            return False
-        # Authenticate client if enabled
-        username = None
-        if self.config.auth.require_auth:
-            groups, username = self.authenticate_client(sck)
-            # Auth failed
-            if groups is None:
-                return False  # Close message and reason was already sent
-            # Deny connect if user doesn't have perms to have role
-            if role_connect not in groups:
-                await self.log(f"Client tried to connect as role '{role_connect}' but does not "
-                               f"have permission to: {sck.remote_address[0]}", "warning")
-                await sck.send(Msg.error(Error.auth_error, "User does not have permission to have role"))
-                await sck.close(1008, "Auth error")
-                return False
-        # If role is limited, deny if that role is "full"
-        if self.config.auth.limits.get(role_connect) \
-                and self.config.auth.limits[role_connect] > len(self.clients.with_role(role_connect)):
-            await self.log(f"Client tried to connect as role '{role_connect}' but there "
-                           f"are too many clients of that role connected", "warning")
-            await sck.send(Msg.error(
-                Error.too_many_clients, f"Too many clients are connected as role '{role_connect}'"))
-            await sck.close(1008, f"Too many clients are connected as role")
-            return False
+            return None
+
+        # Authenticate client
+        username = await self.authenticate_client(sck)
+        if username is None:
+            return None  # Close message and reason was already sent
 
         # Add client
-        await self.log(f"Client connected: {role_connect}:{sck.remote_address[0]}")
-        self.clients.add(Client(sck, username), role_connect)
-        return True
+        await self.log(f"Client {sck.remote_address[0]} connected as user {username} ({role})")
+        client = Client(sck, username, role)
+        self.clients.add(client)
+        return client
 
-    async def authenticate_client(self, sck: websockets.WebSocketServerProtocol) -> \
-            t.Tuple[t.Optional[str], t.Optional[str]]:
+    async def authenticate_client(self, sck: websockets.WebSocketServerProtocol) -> t.Optional[str]:
         """
         Authenticates a client connection
-        :param sck:
-        :return: the list of groups which the client belongs to, or None if the authentication failed
+        :param sck: the socket to authenticate
+        :return: the username authenticated, or None if the authentication failed
         """
         # Receive first message, which should be an `auth` message
         auth_msg_raw = await sck.recv()
         try:
-            auth_msg = json.loads(auth_msg_raw)
-        # Error if invalid JSON
-        except json.JSONDecodeError:
-            await self.log(f"Received message with malformed JSON from {sck.remote_address[0]}", "error")
-            await sck.send(Msg.error(Error.json_parse_error, "Failed to parse message"))
-            await sck.close(1002, "Invalid JSON on auth message")
-            return None, None
-        # Error if invalid message format
-        if not Msg.verify(auth_msg):
-            await self.log(f"Received invalid message from {sck.remote_address[0]}", "error")
-            await sck.send(Msg.error(Error.invalid_message, "The message sent is invalid"))
+            auth_msg = Message.from_json(auth_msg_raw)
+        # Error if invalid message
+        except (serde.ValidationError, json.JSONDecodeError):
+            await self.log(f"Received invalid auth message from {sck.remote_address[0]}", "error")
+            await sck.send_msg(LogMessage(message="Invalid auth message", level="error"))
             await sck.close(1002, "Invalid auth message")
-            return None, None
+            return None
         # Error if first message is not of type `auth`
-        if not auth_msg["type"] == "auth":
-            await self.log(f"Expected `auth` message but received `{auth_msg['type']}` from {sck.remote_address[0]}",
+        if not isinstance(auth_msg, AuthMessage):
+            await self.log(f"Expected auth message but received `{auth_msg.tag_name}` from {sck.remote_address[0]}",
                            "error")
-            await sck.send(Msg.error(Error.auth_error, "Expected an auth message"))
+            await sck.send_msg(LogMessage(message="Expected an auth message", level="error"))
             await sck.close(1008, "Expected an auth message on first message")
-            return None, None
+            return None
         # Check if user exists
+        # TODO redo user system
         if not auth_msg["username"] in self.users:
             await self.log(f"Client tried to authenticate with nonexistent username "
                            f"'{auth_msg['username']}': {sck.remote_address[0]}", "warning")
             # Don't say "incorrect user" so attackers don't know if they have a valid username or not
-            await sck.send(Msg.error(Error.auth_error, "Authentication failed"))
+            await sck.send_msg(LogMessage(message="Authentication failed", level="error"))
             await sck.close(1008, "Authentication failed")
-            return None, None
+            return None
         # Check password
         user = self.users[auth_msg["username"]]
         if not bcrypt.checkpw(auth_msg["password"].encode("utf-8"), user["pw_hash"].encode("ascii")):
             await self.log(f"Client tried to connect as user '{auth_msg['username']}' "
                            f"but failed to authenticate: {sck.remote_address[0]}", "warning")
-            await sck.send(Msg.error(Error.auth_error, "Authentication failed"))
+            await sck.send_msg(LogMessage(message="Authentication failed", level="error"))
             await sck.close(1008, "Authentication failed")
-            return None, None
-        return user["groups"], auth_msg["username"]
+            return None
+        return "todo"
 
     async def unregister_client(self, client: Client):
         """
         Unregisters a client connection
-        :param sck: The connection
-        :return:
+        :param client: The client
         """
-        if sck in self.clients:
-            await self.log(f"Client disconnected with code {sck.close_code}: "
-                           f"{self.clients.get_role(sck)}:{sck.remote_address[0]}",
-                           "info" if sck.close_code <= 1001 else "warning")
-            self.clients.remove(sck)
+        if client in self.clients:
+            await self.log(f"User {client.username} ({client.role}) disconnected with code {client.sck.close_code}",
+                           "info" if client.sck.close_code <= 1001 else "warning")
+            self.clients.remove(client)
         else:
-            await self.log(f"Client disconnected with code {sck.close_code} "
-                           f"which was never registered: {sck.remote_address[0]}", "warning")
+            await self.log(f"User {client.username} ({client.role}) disconnected with code {client.sck.close_code} "
+                           f"but was never registered", "warning")
 
     async def serve(self, sck: websockets.WebSocketServerProtocol, path: str):
         """
         Main entry point for WebSocket server.
         :param sck: The socket to serve for
         :param path: The path which the client connected to
-        :return:
         """
         # Attempt to register client, exit if failed (connection is already closed)
-        if not await self.register_client(sck, path):
-            return
-
-        client: Client = self.clients.get_client(sck)
-        if client is None:
-            await self.log(f"Socket was not registered: {sck.remote_address[0]}", "warning")
-            await sck.close(1008, "Registration failed")
+        client = await self.register_client(sck, path)
+        if not client:
             return
 
         try:
             # Continually receive messages
-            async for msg_raw in sck:
+            async for msg_raw in client.sck:  # raises websockets.ConnectionClosed on close
                 try:
                     # Decode and verify message formatting
-                    try:
-                        msg = json.loads(msg_raw)
-                    except json.JSONDecodeError:
-                        await self.log(f"Received message with malformed JSON from {sck.remote_address[0]}", "error")
-                        await sck.send(Msg.error(Error.json_parse_error, "Failed to parse message"))
-                        continue
-                    if not Msg.verify(msg):
-                        await self.log(f"Received invalid message from {sck.remote_address[0]}", "error")
-                        await sck.send(Msg.error(Error.invalid_message, "The message sent is invalid"))
-                        continue
+                    msg = Message.from_json(msg_raw)
+                    # Delegate to message handler
+                    await self.handlers[msg.__class__](self, client, msg)
 
-                    await self.handlers[msg["type"]](self, sck, msg, self.clients.get_role(client))
+                except (serde.ValidationError, json.JSONDecodeError):
+                    await self.log(f"Received invalid message from {client.ip}", "error")
+                    # await sck.send_msg(LogMessage(message="Invalid message", level="error"))
+                    continue
 
                 # Catch all exceptions within loop so connection doesn't get closed
                 except Exception as e:
@@ -255,173 +217,87 @@ class RoverBaseStation:
                     # Send exception to drivers
                     await self.log(f"Base station error: {e!r}", "error")
 
-            # Loop exits normally when connection closes with OK
+        # Unregister clients when the connection loop ends even if it errors
+        finally:
             await self.unregister_client(client)
 
-        # Unregister clients when they disconnect abnormally (not exit code 1000 or 1001)
-        except websockets.ConnectionClosed:
-            await self.unregister_client(client)
+    # #  MESSAGE HANDLERS  # #
 
-    # Util function for limiting role access to message handler
-    async def _limit_role(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str, required_role: str):
-        if role != required_role:
-            await sck.send(Msg.error(Error.invalid_message, "Message type not allowed with role"))
-            await self.log(f"Non-driver client {role}:{sck.remote_address[0]} sent message with type {msg['type']}",
-                           "warning")
-            return False
-        return True
+    handlers = {}
 
-    # Message handlers
-    async def _log(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
-        await self.log(f"Client {role}:{sck.remote_address[0]} logged: {msg['message']}", msg["level"])
+    # Registers a message handler
+    @classmethod
+    def handler(cls, message_type: t.Type, sender: t.Optional[Role] = None):
+        def decorate(fn: t.Callable[[RoverBaseStation, Client, Message], None]):
+            if sender is not None:
+                def wrapper(self: RoverBaseStation, client: Client, msg: Message):
+                    if client.role != sender:
+                        await self.log(f"User {client.username} ({client.role.name}) sent"
+                                       f" unexpected {msg.tag_name} message", "error")
+                        return
+                    fn(self, client, msg)
+                cls.handlers[message_type] = wrapper
 
-    async def _command(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
-        if not await self._limit_role(sck, msg, role, "driver"):
-            return
-        # Assign the command an id
-        msg["id"] = self.next_command_id
-        self.next_command_id += 1
-        msg["owner"] = {"address": sck.remote_address, "username": } #TODO FINISH REMOVING command_ids
-        # Put the command in the command queue
-        self.command_queue.append(msg)
-        # Update drivers with the new queue
-        await self.broadcast(Msg.queue_status(self.current_command, self.command_queue), "driver")
+            else:
+                cls.handlers[message_type] = fn
+
+        return decorate
+
+    @handler(LogMessage)
+    async def handle_log(self, client: Client, msg: LogMessage):
+        await self.log(f"User {client.username} ({client.role.name}) logged: {msg.message}", msg.level)
+
+    @handler(CommandMessage, Role.DRIVER)
+    async def handle_command(self, client: Client, msg: CommandMessage):
+        # Forward command to rover
+        await self.broadcast(msg, Role.ROVER)
         # Log command
-        await self.log(f"{sck.remote_address} sent command {msg['command']} (#{msg['id']}) "
-                       f"with parameters {msg['parameters']} (#{len(self.command_queue)} in queue)")
+        await self.log(f"Driver {client.username} sent command {msg.command.tag_name}")
 
-    async def _command_response(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
-        if not await self._limit_role(sck, msg, role, "rover"):
-            return
-        # Route response to correct driver
-        if msg["id"] not in self.command_ids:
-            await sck.send(Msg.error(Error.unknown_id, "The given command ID is not valid"))
-            await self.log(f"Command response received from rover {sck.remote_address[0]} "
-                           f"with invalid id", "error")
-            return
-        # Forward the message to connected drivers
-        await self.broadcast(json.dumps(msg), "driver")
-        # Log (debug)
-        await self.log(
-            f"{sck.remote_address[0]} sent response (#{msg['id']}) to "
-            f"{self.command_ids[msg['id']].remote_address}"
-        )
-        # Free up command id
-        # May cause issues if more than 1 rover is connected, which shouldn't ever be the case
-        if self.current_command is None or msg["id"] != self.current_command["id"]:
-            await self.log(f"Command response received from {sck.remote_address[0]} "
-                           f"that does not match the running command", "warning")
-        del self.command_ids[msg["id"]]
-        self.current_command = None
-        # Update the drivers with the new queue
-        await self.broadcast(Msg.queue_status(self.current_command, self.command_queue), "driver")
+    @handler(CommandEndedMessage, Role.ROVER)
+    async def handle_command_ended(self, client: Client, msg: CommandEndedMessage):
+        # Forward to drivers
+        await self.broadcast(msg, Role.DRIVER)
+        # Log ending
+        await self.log(f"Rover {client.username} completed command {msg.command.tag_name}: {msg.completed}")
 
-    async def _status(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
-        if not await self._limit_role(sck, msg, role, "rover"):
-            return
-        status = msg["status"]
-        if status == "busy":
-            pass
-        elif status == "idle":
-            if not len(self.command_queue) == 0:
-                next_command = self.command_queue.pop(0)
-                await self.broadcast(json.dumps(next_command), "rover")
-                await self.log(f"Sent command '{next_command['command']}' "
-                               f"with parameters {next_command['parameters']!r}")
-                self.current_command = next_command
-        else:
-            await self.log(f"Status message received from {sck.remote_address[0]} with an "
-                           f"unknown status: {status}", "error")
+    @handler(CommandStatusMessage, Role.ROVER)
+    async def handle_command_status(self, _client: Client, msg: CommandStatusMessage):
+        # Forward to drivers
+        await self.broadcast(msg, Role.DRIVER)
 
-    async def _clear_queue(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
-        if not await self._limit_role(sck, msg, role, "driver"):
-            return
-        while len(self.command_queue) > 0:
-            # Free up the ids of the removed commands
-            cmd = self.command_queue.pop(0)
-            del self.command_ids[cmd["id"]]
-        await self.log(f"Queue cleared by {sck.remote_address[0]}")
-        await self.broadcast(Msg.queue_status(self.current_command, self.command_queue), "driver")
+    @handler(OptionMessage, Role.DRIVER)
+    async def handle_option(self, client: Client, msg: OptionMessage):  # TODO
+        self.logger.info(f"{client.ip} getting options {msg.get!r}, "
+                         f"Setting options {msg.set!r}")
+        await self.broadcast(msg, Role.ROVER)
 
-    async def _option(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
-        if not await self._limit_role(sck, msg, role, "driver"):
-            return
-        self.logger.info(f"{sck.remote_address[0]} getting options {msg['get']!r}, "
-                         f"Setting options {msg['set']!r}")
-        await self.broadcast(json.dumps(msg), "rover")
+    @handler(OptionResponseMessage)
+    async def handle_option_response(self, client: Client, msg: OptionResponseMessage):  # TODO
+        # Message should not be received by the base station
+        pass
 
-    async def _option_response(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
-        if not await self._limit_role(sck, msg, role, "rover"):
-            return
-        await self.log(f"Option response from {sck.remote_address[0]}: {msg['values']!r}")
-        await self.broadcast(json.dumps(msg), "driver")
+    @handler(SensorDataMessage, Role.ROVER)
+    async def handle_sensor_data(self, _client: Client, msg: OptionResponseMessage):
+        # Forward to drivers
+        await self.broadcast(msg, Role.DRIVER)
+        # TODO log sensor data
 
-    async def _sensors(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
-        if not await self._limit_role(sck, msg, role, "rover"):
-            return
-        if self.config.data.enabled:
-            points = [
-                {
-                    "measurement": meas,
-                    "time": msg["time"],
-                    "fields": fields
-                } for meas, fields in msg["sensors"].values
-            ]
-            try:
-                self.influx.write_points(points)
-            except ConnectionError:
-                await self.log(f"Unable to store sensor data submitted by {role}:{sck.remote_address[0]}", "error")
-        await self.broadcast(json.dumps(msg), "driver")
+    @handler(QueryBaseMessage, Role.DRIVER)
+    async def handle_query_base(self, client: Client, msg: QueryBaseMessage):  # TODO
+        pass
 
-    async def _query(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
-        if not await self._limit_role(sck, msg, role, "driver"):
-            return
-        if msg["query"] == "client_list":
-            await sck.send(Msg.query_response("client_list", {
-                "drivers": [s.remote_address[0] for s in self.clients.with_role("driver")],
-                "rovers": [s.remote_address[0] for s in self.clients.with_role("rover")]
-            }))
-        else:
-            await sck.send(Msg.error(Error.invalid_message, "Invalid query type"))
-            await self.log(f'Received and invalid query from {sck.remote_address}')
+    @handler(QueryBaseResponseMessage)
+    async def handle_query_base_response(self, client: Client, msg: QueryBaseResponseMessage):  # TODO
+        # Message should not be received by the base station
+        pass
 
-    async def _error(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
-        if not await self._limit_role(sck, msg, role, "driver"):
-            return
-        await self.log(f"Client {role}:{sck.remote_address[0]} reported error {msg['error']}: "
-                       f"{msg['message']}", "error")
+    @handler(EStopMessage)
+    async def _e_stop(self, client: Client, msg: EStopMessage):
+        await self.broadcast(msg, Role.ROVER)
+        await self.log(f"Client {client.username} ({client.role.name}) activated e-stop!", "warning")
 
-    async def _e_stop(self, sck: websockets.WebSocketServerProtocol, msg: dict, role: str):
-        await self.broadcast(json.dumps(msg), "rover")
-        await self.log(f"Client {role}:{sck.remote_address[0]} activated e-stop!", "warning")
-        while len(self.command_queue) > 0:
-            # Free up the ids of the removed commands
-            cmd = self.command_queue.pop(0)
-            del self.command_ids[cmd["id"]]
-        await self.broadcast(Msg.queue_status(self.current_command, self.command_queue), "driver")
-
-    async def _auth(self, sck: websockets.WebSocketServerProtocol, _msg: dict, role: str):
-        # Either already authenticated or authentication is not required
-        if self.config.auth.require_auth:
-            await self.log(f"Client tried to authenticate while already authenticated: {role}:{sck.remote_address[0]}",
-                           "warning")
-            await sck.send(Msg.error(
-                Error.auth_error,
-                "Attempted to authenticate while already authenticated"
-            ))
-        # Ignore auth message if not required
-
-    handlers: t.Dict[str, t.Callable[[t.Any, websockets.WebSocketServerProtocol, dict, str], t.Awaitable[None]]] = {
-        "log": _log,
-        "command": _command,
-        "command_response": _command_response,
-        "status": _status,
-        "clear_queue": _clear_queue,
-        "option": _option,
-        "option_response": _option_response,
-        "sensors": _sensors,
-        "query": _query,
-        "error": _error,
-        "e_stop": _e_stop,
-        "auth": _auth
-    }
+    @handler(AuthMessage)
+    async def _auth(self, sck: websockets.WebSocketServerProtocol, _msg: dict, role: str):  # TODO
+        # Message should not be received after the auth step
+        pass

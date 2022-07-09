@@ -8,8 +8,17 @@ encoded in JSON and all contain a `"type"` key, which defines the message type.
 
 ### Command types
 
+#### `"e_stop"`: Emergency stop
+Driver → Base → Rover \
+Response: `Base → Rover: "status"`
+```js
+{
+    "type": "e_stop"
+}
+```
+
 #### `"log"`: Shows info
-Driver ↔ Base ← Rover  
+Driver ↔ Base ← Rover \
 Response: none
 ```js
 {
@@ -20,44 +29,46 @@ Response: none
 ```
 
 #### `"command"`: Runs a command
-Driver → Base → Rover  
+Driver → Base → Rover \
 Response: `Driver → Base: None, Base → Rover: "status", "command_response" (when finished)`
 ```js
 {
     "type": "command",
-    "id": 17574336, // A unique ID used to match commands with responses (always null Driver → Base)
-    "command": "move", // The command to run. null cancels the running command
-    "parameters": { // A dictionary of parameters, as defined by the command
+    // The command object to run. null cancels the running command
+    "command": {
+        "type": "move", // The command type
+        // A set of parameters, as defined by the command
         "distance": 1
     }
 }
 ```
 
-#### `"command_response"`: Returns command status and data
-Driver ← Base ← Rover  
+#### `"command_ended"`: Notifies when the current command ends
+Driver ← Base ← Rover \
 Response: none
 ```js
 {
-    "type": "command_response",
-    "id": 17574336, // The ID of the command that's being responded to
-    "error": null // Error type or null if none
-    "contents": {} // Any other returned info from the command
+    "type": "command_ended",
+    "completed": true // true if the command ran to completion, false otherwise
 }
 ```
 
-#### `"status"`: Returns command status and data
-Base ← Rover  
+#### `"status"`: Returns the current command
+Driver ← Base ← Rover \
 Response: none
 ```js
 {
-  "type": "status",
-  "status": "busy", // Whether the rover is running a command ("busy" or "idle")
-  "current_command": 12345678 // The current command id or null if idle
+    "type": "status",
+    "command": { // The current command object being run, null if idle
+        "type": "move", // The command type
+        // A set of parameters, as defined by the command
+        "distance": 1
+    }
 }
 ```
 
 #### `"option"`: Sets or gets options
-Driver → Base → Rover  
+Driver → Base → Rover \
 Response: `"option_response"`
 ```js
 {
@@ -73,7 +84,7 @@ Response: `"option_response"`
 ```
 
 #### `"option_response"`: Returns option values
-Driver ← Base ← Rover  
+Driver ← Base ← Rover \
 Response: none
 ```js
 {
@@ -85,13 +96,14 @@ Response: none
 }
 ```
 
-#### `"measurement"`: Reports sensor values
-Driver ← Base ← Rover  
+#### `"sensor_data"`: Reports sensor values
+Driver ← Base ← Rover \
 Response: none
 ```js
 {
-    "type": "sensor",
+    "type": "sensor_data",
     "time": 1600896055730369100, // Unix timestamp, in nanoseconds
+    "sensor": "imu",
     "measurements": { // The values of each sensor reported
         "x_accel": 3.2, // A specific value of the sensor (passed to Influx as a field)
         ...
@@ -99,52 +111,45 @@ Response: none
 }
 ```
 
-#### `"query"`: Gets a value from the base station
-Driver → Base  
-Response: `"query_response"`
+#### `"query_base"`: Gets a value from the base station
+Driver → Base \
+Response: `"query_base_response"`
 ```js
 {
-    "type": "query",
+    "type": "query_base",
     "query": "client_list"
 }
 ```
 
-#### `"query_response"`: Returns a value from the base station to the driver
-Driver ← Base  
+#### `"query_base_response"`: Returns a value from the base station to the driver
+Driver ← Base \
 Response: none
 ```js
 {
-    "type": "query_response",
+    "type": "query_base_response",
     "query": "client_list",
     "value": // Any object
 }
 ```
 
-#### `"e_stop"`: Stops all commands
-Driver → Base → Rover  
-Response: `Driver → Base: "queue_status", Base → Rover: "status"`
-```js
-{
-    "type": "e_stop"
-}
-```
-
 #### `"auth"`: Handles authentication
-Driver → Base ← Rover  
-Response: `"auth_response"`, disconnect if unsuccessful
+Driver → Base ← Rover \
+Response: `"auth_response"` followed by disconnect if unsuccessful
 ```js
 {
     "type": "auth",
-    "token": 123456,
+    "token": "<token>"
 }
 ```
 
-#### `"auth_response"`: Handles authentication
-Driver ← Base → Rover  
+#### `"auth_response"`: Notifies if authentication succeeded
+Driver ← Base → Rover \
+Response: none
 ```js
 {
     "type": "auth_response",
-    "success": true
+    "success": true,
+    "user": "rover" // username
 }
 ```
 
@@ -154,7 +159,7 @@ These messages are sent automatically with a frequency configurable with the opt
 - `"sensors"` (Base ← Rover)
 
 ## On-rover protocol (Raspberry Pi ↔ Arduino)
-Serial-based protocol for communicating between RPi and Arduino.  
+Serial-based protocol for communicating between RPi and Arduino. \
 TODO: define protocol
 
 ## User authentication "database": `users.json`
