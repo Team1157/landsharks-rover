@@ -41,27 +41,22 @@ class Command(serde.Model):
 
 class MoveDistanceCommand(Command):
     """Moves a specified distance at the specified speed while turning the specified angle over that distance"""
+    tag_name = "move_distance"
 
     distance: serde.fields.Float
     speed: serde.fields.Float
     angle: serde.fields.Float
 
-    class Meta:
-        tag_name = "move_distance"
-
 
 class MoveContinuousCommand(Command):
     """Moves continuously at the specified speed while turning at specified angle"""
+    tag_name = "move_continuous"
 
     speed: serde.fields.Float
     angle: serde.fields.Float
 
-    class Meta:
-        tag_name = "move_continuous"
-
 
 # MESSAGES #
-
 
 class Message(serde.Model):
     """The base message type."""
@@ -102,9 +97,9 @@ class CommandEndedMessage(Message):
 
 class CommandStatusMessage(Message):
     """Notifies of the current running command"""
-    tag_name = "status"
+    tag_name = "command_status"
 
-    command: serde.fields.Nested(Command)
+    command: serde.fields.Optional(serde.fields.Nested(Command))
 
 
 class AuthMessage(Message):

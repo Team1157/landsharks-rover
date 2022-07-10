@@ -163,24 +163,10 @@ Serial-based protocol for communicating between RPi and Arduino. \
 TODO: define protocol
 
 ## User authentication "database": `users.json`
-This file contains hashed passwords and permission groups of all registered rover users.
-It is encoded in JSON format.
+This file simply contains a list of user secret tokens and usernames.
 ```js
 {
-    1234567: { // User token
-        "username": "",
-        "groups": ["drivers"] // groups are "viewers", "drivers", "rovers"
-    }
+    "<TOKEN>": "sandshark",
+    "<TOKEN>": "driver1"
 }
-```
-Rather than editing directly, user details should be modified with the `rover_user.py` utility
-script.
-```shell script
-python rover_user.py add <user>  # adds a user
-python rover_user.py remove <user>  # removes a user
-python rover_user.py list-users  # lists all registered users
-python rover_user.py change-token <user>  # changes a user's token
-python rover_user.py add-groups <user> <groups>  # adds a user to one or more groups
-python rover_user.py remove-groups <user> <groups>  # removes a user from one or more groups
-python rover_user.py list-groups <user>  # lists the groups the user belongs to
 ```
