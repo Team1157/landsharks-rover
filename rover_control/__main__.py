@@ -1,5 +1,5 @@
 import asyncio
-from rover_control import LandsharksRover
+from rover_control import Sandshark
 
-rover = LandsharksRover()
+rover = Sandshark()
 asyncio.run(rover.main())

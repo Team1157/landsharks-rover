@@ -3,6 +3,7 @@ import json
 import os
 import pathlib
 import sqlite3
+import traceback
 
 import serde
 import toml
@@ -208,7 +209,7 @@ class RoverBaseStation:
                     # Decode and verify message formatting
                     msg = Message.from_json(msg_raw)
                     # Delegate to message handler
-                    await message_handlers[msg.__class__](self, client, msg)
+                    await message_handlers.get(msg.__class__, default_handler)(self, client, msg)
 
                 except (serde.ValidationError, json.JSONDecodeError):
                     await self.log(f"Received invalid message from {client.ip}", "error")
@@ -219,11 +220,18 @@ class RoverBaseStation:
                 except Exception as e:
                     # self.logger.exception(e)
                     # Send exception to drivers
-                    await self.log(f"Base station error: {e!r}", "error")
+                    await self.log(f"Base station error: {traceback.format_exc()}", "error")
+
+        except websockets.ConnectionClosed:
+            pass
 
         # Unregister clients when the connection loop ends even if it errors
         finally:
             await self.unregister_client(client)
+
+    async def main(self, *args, **kwargs):
+        async with websockets.serve(self.serve, *args, **kwargs):
+            await asyncio.Future()  # run forever
 
 
 # #  MESSAGE HANDLERS  # #
@@ -251,6 +259,7 @@ def message_handler(message_type: t.Type, sender: t.Optional[Role] = None):
 
 @message_handler(LogMessage)
 async def handle_log(self: RoverBaseStation, client: Client, msg: LogMessage):
+    # Format log and forward
     await self.log(f"User {client.username} ({client.role.name}) logged: {msg.message}", msg.level)
 
 
@@ -259,7 +268,10 @@ async def handle_command(self: RoverBaseStation, client: Client, msg: CommandMes
     # Forward command to rover
     await self.broadcast(msg, Role.ROVER)
     # Log command
-    await self.log(f"Driver {client.username} sent command {msg.command.tag_name}")
+    if msg.command is None:
+        await self.log(f"Driver {client.username} cancelled the current command")
+    else:
+        await self.log(f"Driver {client.username} sent command {msg.command.tag_name}")
 
 
 @message_handler(CommandEndedMessage, Role.ROVER)
@@ -277,16 +289,15 @@ async def handle_command_status(self: RoverBaseStation, _client: Client, msg: Co
 
 
 @message_handler(OptionMessage, Role.DRIVER)
-async def handle_option(self: RoverBaseStation, client: Client, msg: OptionMessage):  # TODO
-    self.logger.info(f"{client.ip} getting options {msg.get!r}, "
-                     f"Setting options {msg.set!r}")
+async def handle_option(self: RoverBaseStation, _client: Client, msg: OptionMessage):
+    # Forward to rover
     await self.broadcast(msg, Role.ROVER)
 
 
-@message_handler(OptionResponseMessage)
-async def handle_option_response(_self: RoverBaseStation, _client: Client, _msg: OptionResponseMessage):  # TODO
-    # Message should not be received by the base station
-    pass
+@message_handler(OptionResponseMessage, Role.ROVER)
+async def handle_option_response(self: RoverBaseStation, _client: Client, msg: OptionResponseMessage):
+    # Forward to drivers
+    await self.broadcast(msg, Role.DRIVER)
 
 
 @message_handler(SensorDataMessage, Role.ROVER)
@@ -307,25 +318,11 @@ async def handle_query_base(_self: RoverBaseStation, _client: Client, _msg: Quer
     pass
 
 
-@message_handler(QueryBaseResponseMessage)
-async def handle_query_base_response(_self: RoverBaseStation, client: Client, msg: QueryBaseResponseMessage):  # TODO
-    # Message should not be received by the base station
-    pass
-
-
 @message_handler(EStopMessage)
 async def handle_e_stop(self: RoverBaseStation, client: Client, msg: EStopMessage):
     await self.broadcast(msg, Role.ROVER)
     await self.log(f"Client {client.username} ({client.role.name}) activated e-stop!", "warning")
 
 
-@message_handler(AuthMessage)
-async def handle_auth(self: RoverBaseStation, sck: websockets.WebSocketServerProtocol, _msg: dict, role: str):  # TODO
-    # Message should not be received after the auth step
-    pass
-
-
-@message_handler(OptionResponseMessage)
-async def handle_auth_response(self: RoverBaseStation, client: Client, msg: AuthResponseMessage):  # TODO
-    # Message should not be received by the base station
-    pass
+async def default_handler(self: RoverBaseStation, client: Client, msg: Message):
+    await self.log(f"Received unexpected {msg.tag_name} message from {client.username} ({client.role.name})", "warning")

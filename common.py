@@ -84,7 +84,7 @@ class CommandMessage(Message):
     """Sets the current command"""
     tag_name = "command"
 
-    command: serde.fields.Nested(Command)
+    command: serde.fields.Optional(serde.fields.Nested(Command))
 
 
 class CommandEndedMessage(Message):

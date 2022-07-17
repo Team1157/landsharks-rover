@@ -1,14 +1,17 @@
 import asyncio
 import json
 import os
+import time
 import typing as t
-import inspect
+import traceback
+
+import serde.exceptions
 import websockets
 import psutil
-from common import Msg, Error
+from common import *
 
 
-class LandsharksRover:
+class Sandshark:
     commands: t.Dict[str, t.Callable[..., t.Coroutine]] = {}
 
     @classmethod
@@ -19,78 +22,115 @@ class LandsharksRover:
         self.sck: t.Optional[websockets.WebSocketClientProtocol] = None
         self.current_command: t.Optional[asyncio.Task] = None
         self.current_command_id: t.Optional[int] = None
+        self.user: t.Optional[str] = None
+
+    async def report_pi_sensors_task(self):
+        while True:
+            if self.sck is not None and self.sck.open:
+                # Get various pi stat values
+                ram = psutil.virtual_memory()
+                disk = psutil.disk_usage("/")
+                this_proc = psutil.Process(os.getpid())
+                await self.sck.send_msg(SensorDataMessage(time=time.time_ns(), sensor="pi", measurements={
+                    "cpu_percent": psutil.cpu_percent(),
+                    "ram_percent": ram.percent,
+                    "ram_free": ram.available,
+                    "disk_percent": disk.percent,
+                    "disk_free": disk.free,
+                    "ctl_ram_used": this_proc.memory_full_info().uss
+                }))
+            await asyncio.sleep(5)
 
     async def main(self):
-        while True:
+        print("Rover starting!")
+
+        # Start sensor tasks
+        asyncio.Task(self.report_pi_sensors_task())
+
+        # async for sck in websockets.connect("ws://rover.team1157.org:11571/rover", ping_interval=5, ping_timeout=10):
+        async for sck in websockets.connect("ws://127.0.0.1:11571/rover", ping_interval=5, ping_timeout=10):
+            self.sck = sck
+            # Authenticate
+            await sck.send_msg(AuthMessage(token="DUMMY_TOKEN"))
             try:
-                await self.open_ws()
-                print("Successfully connected")
-                await self.handle_ws()
+                auth_response = AuthResponseMessage.from_json(await sck.recv())
+                self.user = auth_response.user
+            except (serde.ValidationError, json.JSONDecodeError):
+                await sck.send_msg(LogMessage(message="Received invalid auth response", level="error"))
+                await sck.close(1002, "Invalid auth response")
+                continue
+
+            try:
+                print("Connected to base station")
+                while True:
+                    try:
+                        async for msg_raw in sck:
+                            try:
+                                msg = Message.from_json(msg_raw)
+                            except (serde.ValidationError, json.JSONDecodeError):
+                                await sck.send_msg(LogMessage(message="Received invalid message", level="error"))
+                                continue
+
+                            # Delegate to message handler
+                            await message_handlers.get(msg.__class__, default_handler)(self, msg)
+                    except Exception as e:
+                        # Re-raise ConnectionClosed
+                        if isinstance(e, websockets.ConnectionClosed):
+                            raise e
+
+                        print(f"Uncaught exception: {e!r}")
+                        if sck.open:
+                            await sck.send_msg(LogMessage(message=f"Uncaught exception in main(): {traceback.format_exc()}", level="error"))
+
             except websockets.ConnectionClosed:
-                print("Disconnected")
-                self.current_command.cancel()
-                # Todo: stop all motors
+                print("Disconnected from base station, reconnecting in 5 seconds...")
+                await asyncio.sleep(5)
+                continue
 
-    async def open_ws(self):
-        print("Attempting to (re)connect to websockets...")
-        while True:
-            try:
-                self.sck = await websockets.connect("ws://team1157.org:11571/rover", ping_interval=5, ping_timeout=10)
-            except ConnectionRefusedError:
-                print("Failed to connect, retrying in 5 seconds...")
-            await asyncio.sleep(5)  # Attempt to reconnect after 5 seconds
 
-    async def handle_ws(self):
-        try:
-            async for msg_raw in self.sck:  # Continuously receive messages
-                try:
-                    msg = json.loads(msg_raw)
-                except json.JSONDecodeError:
-                    await self.sck.send(Msg.error(Error.json_parse_error, "Received malformed JSON"))
-                    continue
-                if not Msg.verify(msg):
-                    await self.sck.send(Msg.error(Error.invalid_message, "The provided message is invalid"))
-                    continue
+message_handlers = {}
 
-                if msg["type"] == "command":
-                    if self.current_command_id is not None and self.current_command_id == msg["id"]:
-                        # Command is already running
-                        continue
-                    cmd = msg["command"]
-                    params = msg["parameters"]
-                    fn = self.commands[cmd]
-                    sig = inspect.signature(fn)
-                    required_params = [k for k, v in sig.parameters.items() if v.default is not inspect.Parameter.empty]
-                    # Verify that all provided params are accepted by the command,
-                    # and that all required params are provided
-                    if not all(x in sig.parameters.keys() for x in params.keys())\
-                            or not all(x in params.keys() for x in required_params):
-                        await self.sck.send(Msg.command_response(
-                            error=Error.command_invalid_parameters,
-                            id_=msg["id"]
-                        ))
-                        continue
-                    # todo?: maybe check types of params
-                    # Cancel current command if there is one
-                    if self.current_command is not None:
-                        self.current_command.cancel()
-                    # Run command
-                    self.current_command = asyncio.create_task(self.command_wrapper(fn(**params), msg["id"]))
-                else:
-                    await self.sck.send(Msg.error(Error.invalid_message, "The message type is invalid"))
-        except Exception as e:
-            await self.sck.send(Msg.error(Error.invalid_message, "Error in message handling: " + str(e)))
 
-    async def command_wrapper(self, coro: t.Coroutine, return_id: int):
-        self.current_command_id = id
-        # Wait for coroutine to finish
-        res = await coro
-        # Send command response
-        await self.sck.send(Msg.command_response(
-            contents=res,
-            id_=return_id
-        ))
-        self.current_command_id = None
+def message_handler(message_type: t.Type):
+    def decorate(fn: t.Callable[[Sandshark, Message], t.Coroutine]):
+        message_handlers[message_type] = fn
+    return decorate
+
+
+@message_handler(CommandMessage)
+async def handle_command(self: Sandshark, msg: CommandMessage):
+    # TODO
+    pass
+
+
+@message_handler(OptionMessage)
+async def handle_option(self: Sandshark, msg: OptionMessage):
+    # TODO
+    pass
+
+
+@message_handler(EStopMessage)
+async def handle_estop(self: Sandshark, msg: EStopMessage):
+    # TODO
+    pass
+
+
+async def default_handler(self: Sandshark, msg: Message):
+    await self.sck.send_msg(LogMessage(message=f"Received unexpected {msg.tag_name} message", level="warning"))
+
+
+command_handlers = {}
+
+
+def command_handler(command_type: t.Type):
+    def decorate(fn: t.Callable[[Sandshark, Command], t.Coroutine]):
+        command_handlers[command_type] = fn
+    return decorate
+
+
+@command_handler(MoveDistanceCommand)
+async def move_distance_command(self: Sandshark, cmd: MoveDistanceCommand):
+    pass
 
 
 def collect_sensors():
@@ -135,91 +175,3 @@ def collect_sensors():
             "current": _dummy
         }
     }
-
-
-# TODO: Split the command definitions off into a separate file somehow
-@LandsharksRover.register_command
-async def ping(*, data: str = ""):
-    return {"message": "pong", "data": data}  # This gets fed into command_response["content"]
-
-
-@LandsharksRover.register_command
-async def move(*,
-               distance: float = 0,
-               angle: float = 0,
-               speed: float = 0.5,
-               acceleration: float = 2):
-    """
-    Performs a movement.
-    :param distance: The distance forward, relative to the rover, to move (m)
-    :param angle: The angle to rotate by throughout the movement (deg)
-    :param speed: The maximum speed during the movement (m/s)
-    :param acceleration: The rate to accelerate at during the movement (m/s^2)
-    :return:
-    """
-    pass  # Translate angle+distance into differential speeds+times
-
-
-@LandsharksRover.register_command
-async def move_differential(*, time: float,
-                            left_speed: float, left_acceleration: float,
-                            right_speed: float, right_acceleration: float):
-    """
-    Performs a movement based on differential speeds
-    :param time: The time to execute the movement (s)
-    :param left_speed: (m/s)
-    :param left_acceleration: (m/s^2)
-    :param right_speed: (m/s)
-    :param right_acceleration: (m/s^2)
-    :return:
-    """
-    pass
-
-
-@LandsharksRover.register_command
-async def camera_move(*, pan: float = 0, tilt: float = 0):
-    """
-    Moves the camera to the specified offset from its current position.
-    :param pan: The horizontal position to move to (deg)
-    :param tilt: The vertical position to move to (deg)
-    :return:
-    """
-    pass
-
-
-@LandsharksRover.register_command
-async def camera_move_absolute(*, pan: float, tilt: float):
-    """
-    Moves the camera to the specified position
-    :param pan: The horizontal position to move to (deg)
-    :param tilt: The vertical position to move to (deg)
-    :return:
-    """
-    pass
-
-
-@LandsharksRover.register_command
-async def camera_capture():
-    """
-    Captures an image based on the current camera options
-    :return:
-    """
-    pass
-
-
-@LandsharksRover.register_command
-async def camera_begin_stream():
-    """
-    Starts a livestream based on the current camera options
-    :return:
-    """
-    pass
-
-
-@LandsharksRover.register_command
-async def camera_end_stream():
-    """
-    Ends the current livestream if it is running
-    :return:
-    """
-    pass
