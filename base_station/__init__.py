@@ -184,11 +184,11 @@ class RoverBaseStation:
         :param client: The client
         """
         if client in self.clients:
-            await self.log(f"User {client.username} ({client.role}) disconnected with code {client.sck.close_code}",
-                           "info" if client.sck.close_code <= 1001 else "warning")
             self.clients.remove(client)
+            await self.log(f"User {client.user} ({client.role}) disconnected with code {client.sck.close_code}",
+                           "info" if client.sck.close_code <= 1001 else "warning")
         else:
-            await self.log(f"User {client.username} ({client.role}) disconnected with code {client.sck.close_code} "
+            await self.log(f"User {client.user} ({client.role}) disconnected with code {client.sck.close_code} "
                            f"but was never registered", "warning")
 
     async def serve(self, sck: websockets.WebSocketServerProtocol, path: str):
@@ -220,7 +220,7 @@ class RoverBaseStation:
                 except Exception as e:
                     # self.logger.exception(e)
                     # Send exception to drivers
-                    await self.log(f"Base station error: {traceback.format_exc()}", "error")
+                    await self.log(f"Base station error {e!r}: {traceback.format_exc()}", "error")
 
         except websockets.ConnectionClosed:
             pass
@@ -244,7 +244,7 @@ def message_handler(message_type: t.Type, sender: t.Optional[Role] = None):
         if sender is not None:
             async def wrapper(self: RoverBaseStation, client: Client, msg: Message):
                 if client.role != sender:
-                    await self.log(f"User {client.username} ({client.role.name}) sent"
+                    await self.log(f"User {client.user} ({client.role.name}) sent"
                                    f" unexpected {msg.tag_name} message", "error")
                     return
                 await fn(self, client, msg)
@@ -260,7 +260,7 @@ def message_handler(message_type: t.Type, sender: t.Optional[Role] = None):
 @message_handler(LogMessage)
 async def handle_log(self: RoverBaseStation, client: Client, msg: LogMessage):
     # Format log and forward
-    await self.log(f"User {client.username} ({client.role.name}) logged: {msg.message}", msg.level)
+    await self.log(f"User {client.user} ({client.role.name}) logged: {msg.message}", msg.level)
 
 
 @message_handler(CommandMessage, Role.DRIVER)
@@ -269,9 +269,9 @@ async def handle_command(self: RoverBaseStation, client: Client, msg: CommandMes
     await self.broadcast(msg, Role.ROVER)
     # Log command
     if msg.command is None:
-        await self.log(f"Driver {client.username} cancelled the current command")
+        await self.log(f"Driver {client.user} cancelled the current command")
     else:
-        await self.log(f"Driver {client.username} sent command {msg.command.tag_name}")
+        await self.log(f"Driver {client.user} sent command {msg.command.tag_name}")
 
 
 @message_handler(CommandEndedMessage, Role.ROVER)
@@ -279,7 +279,7 @@ async def handle_command_ended(self: RoverBaseStation, client: Client, msg: Comm
     # Forward to drivers
     await self.broadcast(msg, Role.DRIVER)
     # Log ending
-    await self.log(f"Rover {client.username} completed command {msg.command.tag_name}: {msg.completed}")
+    await self.log(f"Rover {client.user} completed command {msg.command.tag_name}: {msg.completed}")
 
 
 @message_handler(CommandStatusMessage, Role.ROVER)
@@ -314,15 +314,26 @@ async def handle_sensor_data(self: RoverBaseStation, _client: Client, msg: Senso
 
 
 @message_handler(QueryBaseMessage, Role.DRIVER)
-async def handle_query_base(_self: RoverBaseStation, _client: Client, _msg: QueryBaseMessage):  # TODO
-    pass
+async def handle_query_base(self: RoverBaseStation, client: Client, msg: QueryBaseMessage):  # TODO
+    match msg.query:
+        case "clients":
+            await client.sck.send_msg(QueryBaseResponseMessage(
+                query=msg.query,
+                value=[{"user": client.user, "ip": client.sck.remote_address, "role": client.role.name} for client in self.clients]
+            ))
 
 
 @message_handler(EStopMessage)
 async def handle_e_stop(self: RoverBaseStation, client: Client, msg: EStopMessage):
     await self.broadcast(msg, Role.ROVER)
-    await self.log(f"Client {client.username} ({client.role.name}) activated e-stop!", "warning")
+    await self.log(f"Client {client.user} ({client.role.name}) activated e-stop!", "warning")
+
+
+@message_handler(PointCameraMessage, Role.DRIVER)
+async def handle_point_camera(self: RoverBaseStation, _client: Client, msg: PointCameraMessage):
+    # Forward to rover
+    await self.broadcast(msg, Role.ROVER)
 
 
 async def default_handler(self: RoverBaseStation, client: Client, msg: Message):
-    await self.log(f"Received unexpected {msg.tag_name} message from {client.username} ({client.role.name})", "warning")
+    await self.log(f"Received unexpected {msg.tag_name} message from {client.user} ({client.role.name})", "warning")

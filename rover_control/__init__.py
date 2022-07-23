@@ -8,6 +8,8 @@ import traceback
 import serde.exceptions
 import websockets
 import psutil
+import serial
+import serial_asyncio
 from common import *
 
 
@@ -20,9 +22,17 @@ class Sandshark:
 
     def __init__(self):
         self.sck: t.Optional[websockets.WebSocketClientProtocol] = None
-        self.current_command: t.Optional[asyncio.Task] = None
-        self.current_command_id: t.Optional[int] = None
+        self.current_command: t.Optional[Command] = None
         self.user: t.Optional[str] = None
+        self.serial_connected: bool = False
+        self.serial_reader: t.Optional[asyncio.StreamReader] = None
+        self.serial_writer: t.Optional[asyncio.StreamWriter] = None
+
+        self.options = {
+            "navicam.enabled": False,
+            "prettycam.enabled": False,
+
+        }
 
     async def report_pi_sensors_task(self):
         while True:
@@ -45,30 +55,32 @@ class Sandshark:
         print("Rover starting!")
 
         # Start sensor tasks
-        asyncio.Task(self.report_pi_sensors_task())
+        asyncio.create_task(self.report_pi_sensors_task())
+
+        # Start serial listener
+        asyncio.create_task(self.serial_main())
 
         # async for sck in websockets.connect("ws://rover.team1157.org:11571/rover", ping_interval=5, ping_timeout=10):
-        async for sck in websockets.connect("ws://127.0.0.1:11571/rover", ping_interval=5, ping_timeout=10):
-            self.sck = sck
+        async for self.sck in websockets.connect("ws://127.0.0.1:11571/rover", ping_interval=5, ping_timeout=10):
             # Authenticate
-            await sck.send_msg(AuthMessage(token="DUMMY_TOKEN"))
+            await self.sck.send_msg(AuthMessage(token="DUMMY_TOKEN"))
             try:
-                auth_response = AuthResponseMessage.from_json(await sck.recv())
+                auth_response = AuthResponseMessage.from_json(await self.sck.recv())
                 self.user = auth_response.user
             except (serde.ValidationError, json.JSONDecodeError):
-                await sck.send_msg(LogMessage(message="Received invalid auth response", level="error"))
-                await sck.close(1002, "Invalid auth response")
+                await self.sck.send_msg(LogMessage(message="Received invalid auth response", level="error"))
+                await self.sck.close(1002, "Invalid auth response")
                 continue
 
             try:
                 print("Connected to base station")
                 while True:
                     try:
-                        async for msg_raw in sck:
+                        async for msg_raw in self.sck:
                             try:
                                 msg = Message.from_json(msg_raw)
                             except (serde.ValidationError, json.JSONDecodeError):
-                                await sck.send_msg(LogMessage(message="Received invalid message", level="error"))
+                                await self.sck.send_msg(LogMessage(message="Received invalid message", level="error"))
                                 continue
 
                             # Delegate to message handler
@@ -78,12 +90,47 @@ class Sandshark:
                         if isinstance(e, websockets.ConnectionClosed):
                             raise e
 
-                        print(f"Uncaught exception: {e!r}")
-                        if sck.open:
-                            await sck.send_msg(LogMessage(message=f"Uncaught exception in main(): {traceback.format_exc()}", level="error"))
+                        print(f"Uncaught exception in main(): {e!r}")
+                        if self.sck.open:
+                            await self.sck.send_msg(LogMessage(
+                                message=f"Rover error in main(): {e!r}: {traceback.format_exc()}",
+                                level="error"
+                            ))
 
             except websockets.ConnectionClosed:
                 print("Disconnected from base station, reconnecting in 5 seconds...")
+                await asyncio.sleep(5)
+                continue
+
+    async def serial_main(self):
+        while True:
+            try:
+                self.serial_reader, self.serial_writer = await serial_asyncio.open_serial_connection(url="COM5", baudrate=115200)
+                self.serial_connected = True
+
+                while True:
+                    try:
+                        line = await self.serial_reader.readline()
+                        print(line)
+                    except Exception as e:
+                        # Re-raise SerialException
+                        if isinstance(e, serial.SerialException):
+                            raise e
+
+                        print(f"Uncaught exception in serial_main(): {e!r}")
+                        if self.sck.open:
+                            await self.sck.send_msg(LogMessage(
+                                message=f"Rover error in serial_main(): {e!r}: {traceback.format_exc()}",
+                                level="error"
+                            ))
+            except serial.SerialException:
+                self.serial_connected = False
+                print("Disconnected from arduino, reconnecting in 5 seconds...")
+                if self.sck.open:
+                    await self.sck.send_msg(LogMessage(
+                        message=f"Disconnected from arduino with error: {traceback.format_exc()}",
+                        level="error"
+                    ))
                 await asyncio.sleep(5)
                 continue
 
@@ -99,18 +146,40 @@ def message_handler(message_type: t.Type):
 
 @message_handler(CommandMessage)
 async def handle_command(self: Sandshark, msg: CommandMessage):
-    # TODO
-    pass
+    if self.current_command is not None:
+        # TODO cancel command
+        if self.sck.open:
+            await self.sck.send_msg(CommandEndedMessage(command=self.current_command), completed=False)
+    self.current_command = msg.command
+    if msg.command is not None:
+        if self.serial_connected:
+            self.serial_writer.write(self.current_command.to_arduino())
+        elif self.sck.open:
+            await self.sck.send_msg(LogMessage(
+                message="Could not set command because Arduino is not connected",
+                level="error"
+            ))
 
 
 @message_handler(OptionMessage)
 async def handle_option(self: Sandshark, msg: OptionMessage):
-    # TODO
-    pass
+    # Set values
+    self.options.update(msg.set)
+
+    # Get values
+    await self.sck.send_msg(OptionResponseMessage(
+        values={k: self.options[k] for k in set(msg.set.keys()).union(msg.get)}
+    ))
 
 
 @message_handler(EStopMessage)
 async def handle_estop(self: Sandshark, msg: EStopMessage):
+    # TODO
+    pass
+
+
+@message_handler(PointCameraMessage)
+async def handle_point_camera(self: Sandshark, msg:PointCameraMessage):
     # TODO
     pass
 
