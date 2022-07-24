@@ -24,6 +24,7 @@ class Role(Enum):
         return None
 
 
+# Serialization shim to customize the type tag
 class Tag(serde.tags.Internal):
     def lookup_tag(self, variant):
         # return getattr(getattr(variant, "Meta"), "tag_name", super().lookup_tag(variant))
@@ -38,22 +39,28 @@ class Command(serde.Model):
         abstract = True
         tag = Tag(tag="type")
 
+    def to_arduino(self) -> bytes: raise NotImplementedError
+
 
 class MoveDistanceCommand(Command):
     """Moves a specified distance at the specified speed while turning the specified angle over that distance"""
     tag_name = "move_distance"
 
-    distance: serde.fields.Float
-    speed: serde.fields.Float
-    angle: serde.fields.Float
+    distance: serde.fields.Float()
+    speed: serde.fields.Float()
+    angle: serde.fields.Float()
+
+    def to_arduino(self): return f"{self.tag_name} {self.distance} {self.speed} {self.angle}".encode()
 
 
 class MoveContinuousCommand(Command):
     """Moves continuously at the specified speed while turning at specified angle"""
     tag_name = "move_continuous"
 
-    speed: serde.fields.Float
-    angle: serde.fields.Float
+    speed: serde.fields.Float()
+    angle: serde.fields.Float()
+
+    def to_arduino(self): return f"{self.tag_name} {self.speed} {self.angle}".encode()
 
 
 # MESSAGES #
@@ -84,7 +91,7 @@ class CommandMessage(Message):
     """Sets the current command"""
     tag_name = "command"
 
-    command: serde.fields.Nested(Command)
+    command: serde.fields.Optional(serde.fields.Nested(Command))
 
 
 class CommandEndedMessage(Message):
@@ -121,8 +128,8 @@ class OptionMessage(Message):
     """Sets or gets options"""
     tag_name = "option"
 
-    get: serde.fields.List()
-    set: serde.fields.Dict()
+    get: serde.fields.List(element=serde.fields.Str())
+    set: serde.fields.Dict(key=serde.fields.Str())
 
 
 class OptionResponseMessage(Message):
@@ -138,7 +145,7 @@ class SensorDataMessage(Message):
 
     time: serde.fields.Int()
     sensor: serde.fields.Str()
-    measurements: serde.fields.Dict(key=serde.fields.Str)
+    measurements: serde.fields.Dict(key=serde.fields.Str())
 
 
 class QueryBaseMessage(Message):
@@ -154,6 +161,14 @@ class QueryBaseResponseMessage(Message):
 
     query: serde.fields.Str()
     value: None
+
+
+class PointCameraMessage(Message):
+    """Sets the target camera pointing direction"""
+    tag_name = "point_camera"
+
+    yaw: serde.fields.Float()
+    pitch: serde.fields.Float()
 
 
 # Extension method
@@ -183,5 +198,6 @@ __all__ = [
     "OptionResponseMessage",
     "SensorDataMessage",
     "QueryBaseMessage",
-    "QueryBaseResponseMessage"
+    "QueryBaseResponseMessage",
+    "PointCameraMessage"
 ]

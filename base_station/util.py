@@ -16,9 +16,9 @@ LOG_LEVELS = {
 
 
 class Client:
-    def __init__(self, sck: websockets.WebSocketServerProtocol, username: str, role: Role):
+    def __init__(self, sck: websockets.WebSocketServerProtocol, user: str, role: Role):
         self.sck = sck
-        self.username = username
+        self.user = user
         self.role = role
 
     @property
