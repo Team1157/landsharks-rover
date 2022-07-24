@@ -1,4 +1,6 @@
-needs start-of-packet sequence. header with message length
+Commands are seperated by newline
+Numbers are sent in decimal
+Each command starts with an integer id, subsequent parameters are seperated by spaces
 
 Commands:
 	unified wheels move (specify movement for each wheel)
@@ -16,8 +18,8 @@ format (each is a byte):
 	command (length based on command ID)
 	
 more complete command stuff
-	Estop          : 0x00
-	Heartbeat      : 0x01
+	E-stop         : 0
+	Heartbeat      : 1
 	
 _________________________________________________________________
 movement calculation

@@ -156,7 +156,7 @@ Response: none
 ### Periodic messages 
 These messages are sent automatically with a frequency configurable with the options message.
 - `"status"` (Base ← Rover)
-- `"sensors"` (Base ← Rover)
+- `"measurement"` (Base ← Rover)
 
 ## On-rover protocol (Raspberry Pi ↔ Arduino)
 Serial-based protocol for communicating between RPi and Arduino. \

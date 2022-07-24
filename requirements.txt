@@ -1,5 +1,6 @@
-websockets  # For communication between base station and rover, and between driver station and base station
-toml # For configuration files
+websockets~=10.3
+toml~=0.10.2
 pyserial-asyncio  # For communication between Raspberry Pi and Arduino on rover
-psutil  # For system monitoring on Pi
+psutil~=5.9.1
 click  # For `rover_user` command-line utility
+serde~=0.8.1

@@ -1,97 +1,125 @@
-/* motor pin layout
- * left|front|right  
- *        ^
- * m0  p2 - m3 p19
- *        |
- *        |
- * m1  p3 - m4 p20
- *        |
- *        |
- * m2 p18 - m5 p21
-*/
-const byte EncIntPin[] = { 2,  3, 18, 19, 20, 21}, //main triggers for the encoder interrupts
-           EncDirPin[] = {22, 24, 26, 28, 30, 32}, //secondary encoder pins for finding direction. Weird numbers to free up PWM pins
-           MotPwmPin[] = { 5,  6,  7,  8,  9, 10}, //pwm outputs for motors
-           MotDirPin[] = {23, 25, 27, 29, 31, 33}; //directional select for motors
+#include <YetAnotherPcInt.h>
+#include <TaskScheduler.h>
 
-const bool InvertCtl[] = { 1,  1,  1,  0,  0,  0}; //if all motors are wired the same, one side will need to be inverted to count properly
-long CountStep[6] = {0}; //count step set by InvertCt[]. Should always be +-1
+#define PAN_PWM_PIN 2
+#define PAN_ENCODER_PIN 3
+#define TILT_PWM_PIN 12
+#define PANEL_CURRENT_PIN A0
 
-volatile long Count[6] = {0}; //cumulative total count of encoder ticks
+const byte ENC_INT_PINS[] = {62, 63, 64, 65, 66, 67}, //main triggers for the encoder interrupts
+           ENC_DIR_PINS[] = {22, 23, 24, 25, 26, 27}, //secondary encoder pins for finding direction
+           MOT_PWM_PINS[] = { 4,  7,  8,  9, 10, 11}, //pwm outputs for motors
+           MOT_DIR_PINS[] = {53, 52, 51, 50, 49, 48}, //directional select for motors
+           PIR_PINS[] = {10, 11, 12, 13};
+
+const bool INVERT_MOTORS[] = { 0,  1,  0,  1,  0,  1}; // A 1 indicates a motor is inverted
+
+const int MOT_P_GAIN = 0;
+const int MOT_I_GAIN = 0;
+
+byte INDICES[] = {0, 1, 2, 3, 4, 5};
+
+int8_t encCountStep[6] = {0}; // The number to increment by each time an encoder ticks forward, determined by INVERT_MOTORS
+
+volatile long encCount[6] = {0}; // The cumulative total count of encoder ticks for each encoder
+long lastEncCount[6] = {0};
+unsigned long lastMotUpdates[6] = {0};
+int lastErr[6] = {0};
+int motSetpoints[6] = {0}; // Between -1000000000 and 1000000000
+
+Scheduler scheduler;
+
+void driveTaskCallback();
+void stopMotors();
+Task driveTask = Task(20, TASK_FOREVER, &driveTaskCallback, &scheduler, false, NULL, stopMotors);
 
 void setup() {
-  for(int i = 0; i < 6; i++) {
-    pinMode(EncIntPin[i], INPUT);
-    pinMode(EncDirPin[i], INPUT);
+  for(byte i = 0; i < 6; i++) {
+    pinMode(ENC_INT_PINS[i], INPUT);
+    pinMode(ENC_DIR_PINS[i], INPUT);
 
-    pinMode(MotPwmPin[i], OUTPUT);
-    pinMode(MotDirPin[i], OUTPUT);
-    
-    if(InvertCtl[i]) { //set the count step for each motor
-      CountStep[i] = -1;
+    pinMode(MOT_PWM_PINS[i], OUTPUT);
+    pinMode(MOT_DIR_PINS[i], OUTPUT);
+
+    if(INVERT_MOTORS[i]) { //set the count step for each motor
+      encCountStep[i] = -1;
     }
     else {
-      CountStep[i] = 1;
+      encCountStep[i] = 1;
     }
+    
+    PcInt::attachInterrupt(ENC_INT_PINS[i], handleInterrupt, &INDICES[i], CHANGE);
   }
 
-  //set each interrupt to happen as the motor transitions from low to high
-  attachInterrupt(digitalPinToInterrupt(EncIntPin[0]), CountM0, RISING);
-  attachInterrupt(digitalPinToInterrupt(EncIntPin[1]), CountM1, RISING);
-  attachInterrupt(digitalPinToInterrupt(EncIntPin[2]), CountM2, RISING);
-  attachInterrupt(digitalPinToInterrupt(EncIntPin[3]), CountM3, RISING);
-  attachInterrupt(digitalPinToInterrupt(EncIntPin[4]), CountM4, RISING);
-  attachInterrupt(digitalPinToInterrupt(EncIntPin[5]), CountM5, RISING);
+  Serial.begin(115200);
+}
 
-  Serial.begin(19200);
-  while(!Serial){
-    ;//wait for serial port to begin program
+void handleInterrupt(byte *index, bool pinState) {
+  encCount[*index] += encCountStep[*index] * (digitalRead((ENC_DIR_PINS[*index]) ^ pinState) * 2 - 1);
+}
+
+long newCount;
+long deltaCount;
+unsigned long currMicros;
+unsigned long deltaMicros;
+int err;
+int deltaErr;
+
+void updateMotorController(byte index, int setpoint) { // Target velocity in clicks per second
+  // Get clicks since last loop
+  noInterrupts();
+  newCount = encCount[index];
+  interrupts();
+  deltaCount = newCount - lastEncCount[index];
+  lastEncCount[index] = newCount;
+
+  // Get time since last loop
+  currMicros = micros();
+  deltaMicros = currMicros - lastMotUpdates[index];
+  lastMotUpdates[index] = currMicros;
+
+  // Calculate the difference between the current and target velocity in clicks per second
+  err = setpoint - deltaCount * 1000000 / deltaMicros;
+  deltaErr = err - lastErr[index];
+  lastErr[index] = err;
+
+  // Calculate the velocity PID algorithm from err and gains
+  motSetpoints[index] += MOT_P_GAIN * deltaErr + MOT_I_GAIN * err * deltaMicros / 1000;
+  motSetpoints[index] = constrain(motSetpoints[index], -1000000000, 1000000000);
+
+  // Write setpoint to motor
+  digitalWrite(MOT_DIR_PINS[index], motSetpoints[index] < 0);
+  analogWrite(MOT_PWM_PINS[index], abs(motSetpoints[index]) * 255 / 1000000000);
+}
+
+void resetController(byte index) {
+  motSetpoints[index] = 0;
+  lastEncCount[index] = 0;
+  
+  lastMotUpdates[index] = micros();
+  
+  noInterrupts();
+  encCount[index] = 0;
+  interrupts();
+}
+
+void driveTaskCallback() {
+  if(driveTask.isFirstIteration()) {
+    for(byte i = 0; i < 6; i++) {
+      resetController(i);
+    }
+  } else {
+    
+  }
+}
+
+
+void stopMotors() {
+  for(byte i; i < 6; i++) {
+    digitalWrite(MOT_PWM_PINS[i], LOW);
   }
 }
 
 void loop() {
-  long startCount[6];
-  unsigned long startTime[6];
-  
-  for(int i = 0; i < 6; i++) {
-    startCount[i] = Count[i];
-    startTime[i] = micros(); //done per-motor for accuracy
-  }
-
-  for(int i = 0; i < 6; i++) {
-    SetMotor(i, OutputSpeed[i]);
-  }
-
-  for(int i = 0; i < 6; i++) {
-    double counts = (Count[i] - startCount[i]);
-    double elapsedTime = (micros() - startTime[i]);
-    CurrentSpeed[i] = (1000000.0*counts)/(2994.6*elapsedTime);
-  }
-}
-
-void CountGeneric (byte motor) {
-  if(digitalRead(EncDirPin[motor]) == LOW){
-    Count[motor] += CountStep[motor]; //increment by the countStep. This allows inverting of each motor without a conditional each interrupt
-  }
-  else {
-    Count[motor] -= CountStep[motor]; 
-  }
-}
-
-void CountM0 () {CountGeneric(0);}
-void CountM1 () {CountGeneric(1);}
-void CountM2 () {CountGeneric(2);}
-void CountM3 () {CountGeneric(3);}
-void CountM4 () {CountGeneric(4);}
-void CountM5 () {CountGeneric(5);}
-
-void SetMotor (byte motor, double setting) {
-  analogWrite(MotPwmPin[motor], abs(setting));
-  digitalWrite(MotDirPin[motor], sgn(setting));
-}
-
-//signum function
-template <typename type>
-type sgn(type value) {
-  return type((value>0)-(value<0));
+  scheduler.execute();
 }
