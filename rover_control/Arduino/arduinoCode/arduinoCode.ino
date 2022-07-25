@@ -31,7 +31,7 @@ Scheduler scheduler;
 
 void driveTaskCallback();
 void stopMotors();
-Task driveTask = Task(20, TASK_FOREVER, &driveTaskCallback, &scheduler, false, NULL, stopMotors);
+Task driveTask(20, TASK_FOREVER, &driveTaskCallback, &scheduler, false, nullptr, stopMotors);
 
 void setup() {
   for(byte i = 0; i < 6; i++) {
@@ -47,7 +47,7 @@ void setup() {
     else {
       encCountStep[i] = 1;
     }
-    
+
     PcInt::attachInterrupt(ENC_INT_PINS[i], handleInterrupt, &INDICES[i], CHANGE);
   }
 

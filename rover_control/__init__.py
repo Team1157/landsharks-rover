@@ -179,7 +179,7 @@ async def handle_estop(self: Sandshark, msg: EStopMessage):
 
 
 @message_handler(PointCameraMessage)
-async def handle_point_camera(self: Sandshark, msg:PointCameraMessage):
+async def handle_point_camera(self: Sandshark, msg: PointCameraMessage):
     # TODO
     pass
 

@@ -50,7 +50,7 @@ class MoveDistanceCommand(Command):
     speed: serde.fields.Float()
     angle: serde.fields.Float()
 
-    def to_arduino(self): return f"{self.tag_name} {self.distance} {self.speed} {self.angle}".encode()
+    def to_arduino(self): return f"d{self.distance} {self.speed} {self.angle}".encode()  # TODO
 
 
 class MoveContinuousCommand(Command):
@@ -60,7 +60,7 @@ class MoveContinuousCommand(Command):
     speed: serde.fields.Float()
     angle: serde.fields.Float()
 
-    def to_arduino(self): return f"{self.tag_name} {self.speed} {self.angle}".encode()
+    def to_arduino(self): return f"c{self.speed} {self.angle}".encode()  # TODO
 
 
 # MESSAGES #
@@ -169,6 +169,7 @@ class PointCameraMessage(Message):
 
     yaw: serde.fields.Float()
     pitch: serde.fields.Float()
+    relative: serde.fields.Bool() = False
 
 
 # Extension method
