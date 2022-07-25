@@ -1,29 +1,34 @@
 #include "parser.h"
+
+#include <Arduino.h>
+
 #define CHECK_ARGS(scan, num) \
   if (scan != num) { \
-    Serial.println("log error Failed to parse args") \
+    Serial.println("log error Failed to parse args"); \
     break;\
   }
 
-char command_buf[256] = {'\0'};
+char command_buffer[256] = {'\0'};
 size_t command_buf_index = 0; // bounded 0 to 254
 bool command_buf_overrun = false;
+
+void execute_command();
 
 void read_serial_task() {
   int r;
   while ((r = Serial.read()) != -1) {
     if (r == '\n') {
-      command_buf[command_buf_index] = '\0';
+      command_buffer[command_buf_index] = '\0';
       command_buf_index = 0;
       if (command_buf_overrun) {
         command_buf_overrun = false;
       }
       else {
-        execute_command()
+        execute_command();
       }
     }
     else {
-      command_buf[command_buf_index] = r;
+      command_buffer[command_buf_index] = r;
     }
     if (command_buf_index >= 255) {
       Serial.println("log error Command buffer overrun");
@@ -35,7 +40,7 @@ void read_serial_task() {
 
 void execute_command() {
   // Read the command specifier
-  switch command_buf[0] {
+  switch (command_buffer[0]) {
     case 'e': { // Echo
       // Return rest of buffer raw
       Serial.print("echo ");
