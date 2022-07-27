@@ -1,6 +1,7 @@
 #include "parser.h"
 
 #include <Arduino.h>
+#include <stdint.h>
 
 #define CHECK_ARGS(scan, num) \
   if (scan != num) { \
@@ -29,6 +30,7 @@ void read_serial_task() {
     }
     else {
       command_buffer[command_buf_index] = r;
+      command_buf_index++;
     }
     if (command_buf_index >= 255) {
       Serial.println("log error Command buffer overrun");
@@ -49,19 +51,19 @@ void execute_command() {
     }
     case 'p': { // Camera pan
       uint16_t yaw, pitch;
-      CHECK_ARGS(sscanf(command_buffer+1, "%d %d", yaw, pitch), 2);
-      // TODO
+      CHECK_ARGS(sscanf(command_buffer+1, "%d %d", &yaw, &pitch), 2);
+      moveCameraCommand(yaw, pitch);
       break;
     }
     case 'd': { // Move distance
       uint16_t dist, spd, angle;
-      CHECK_ARGS(sscanf(command_buffer+1, "%d %d %d", dist, spd, angle), 3);
-      // TODO
+      CHECK_ARGS(sscanf(command_buffer+1, "%d %d %d", &dist, &spd, &angle), 3);
+      moveDistanceCommand(dist, spd, angle);
       break;
     }
     case 'c': { // Move continuous
       uint16_t spd, angle;
-      CHECK_ARGS(sscanf(command_buffer+1,"%d %d", spd, angle), 3);
+      CHECK_ARGS(sscanf(command_buffer+1,"%d %d", &spd, &angle), 3);
       // TODO
       break;
     }

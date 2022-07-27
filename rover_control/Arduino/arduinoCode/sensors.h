@@ -1,5 +1,6 @@
-#ifndef SENSORS_H
-#define SENSORS_H
+#pragma once
+
+#include <TaskSchedulerDeclarations.h>
 
 namespace sensor {
 
@@ -8,26 +9,20 @@ class Sensor {
     struct SensorData {
       unsigned long timestamp; // millis since startup
     } lastData;
-    
-    struct SensorSettings {
-      int pollInterval; // in millis
-      int messageInterval; // in millis
-    } settings;
 
-    Sensor(String sensorName, int pollInterval, int messageInterval);
+    Task pollTask;
+
+    Sensor(Scheduler scheduler, String sensorName, int pollInterval);
     void periodic();
     void setEnabled(bool enable);
 
   protected:
     String sensorName;
-    bool enabled;
     
   private:
-    unsigned long lastPollTime;
-    unsigned long lastMessageTime;
-  
     void poll();
     void sendData();
+    void callback();
 };
 
 class BME280: Sensor {
@@ -38,7 +33,7 @@ class BME280: Sensor {
       float pressure; // Pascals
     } lastData;
 
-    BME280(String sensorName, int pollInterval = 5000, int messageInterval = 5000, bool altAddress = false);
+    BME280(Scheduler scheduler, String sensorName, int messageInterval = 5000, bool altAddress = false);
 
   private:
     Bme280TwoWire bme;
@@ -58,7 +53,7 @@ class BNO055: Sensor {
       double yaw;
     } lastData;
   
-    BNO055(String sensorName, int pollInterval = 5000, int messageInterval = 5000);
+    BNO055(Scheduler scheduler, String sensorName, int pollInterval = 5000);
 
   private:
     Adafruit_BNO055 bno;
@@ -68,5 +63,3 @@ class BNO055: Sensor {
 };
 
 }
-
-#endif

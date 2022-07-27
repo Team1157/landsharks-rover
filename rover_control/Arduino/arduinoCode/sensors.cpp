@@ -2,49 +2,40 @@
 #include <Bme280.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
+
 #include "sensors.h"
 
 namespace sensor {
 
-Sensor::Sensor(String sensorName, int pollInterval, int messageInterval) {
+Sensor::Sensor(Scheduler scheduler, String sensorName, int pollInterval) {
   this->sensorName = sensorName;
-  settings = SensorSettings{pollInterval, messageInterval};
+//  this->pollTask = Task(pollInterval, TASK_FOREVER, &this->callback, &scheduler);
+  
   setEnabled(true);
 }
 
-void Sensor::periodic() {
-  if(!enabled) {
-    return;
-  }
-  
-  unsigned long now = millis();
-  if(now - lastPollTime >= settings.pollInterval) {
-    poll();
-    lastPollTime %= settings.pollInterval;
-  }
-  if(now - lastMessageTime >= settings.messageInterval) {
-    sendData();
-    lastMessageTime %= settings.messageInterval;
-  }
-}
-
 void Sensor::setEnabled(bool enabled) {
-  this->enabled = enabled;
-  if(enabled) {
-    unsigned long now = millis();
-    lastPollTime = now;
-    lastMessageTime = now;
+  if (enabled) {
+    this->pollTask.enableIfNot();
+  } else {
+    this->pollTask.disable();
   }
 }
 
-BME280::BME280(String sensorName, int pollInterval, int messageInterval, bool altAddress):
-Sensor(sensorName, pollInterval, messageInterval) {
+void Sensor::callback() {
+  poll();
+  sendData();
+}
+
+BME280::BME280(Scheduler scheduler, String sensorName, int pollInterval = 5000, bool altAddress = false):
+Sensor(scheduler, sensorName, pollInterval) {
   Bme280TwoWireAddress addr = altAddress ? Bme280TwoWireAddress::Secondary : Bme280TwoWireAddress::Primary;
   Wire.begin((char) addr);
   bme.begin(addr);
 }
 
 void BME280::poll() {
+  lastData.timestamp = millis();
   lastData.temp = bme.getTemperature();
   lastData.humidity = bme.getHumidity();
   lastData.pressure = bme.getPressure();
@@ -59,10 +50,15 @@ void BME280::sendData() {
   );
 }
 
-BNO055::BNO055(String sensorName, int pollInterval, int messageInterval):
-Sensor(sensorName, pollInterval, messageInterval){
+BNO055::BNO055(Scheduler scheduler, String sensorName, int pollInterval = 5000):
+Sensor(scheduler, sensorName, pollInterval){
   bno = Adafruit_BNO055(55, 0x28);
   bno.begin();
+}
+
+void BNO055::poll() {
+  lastData.timestamp = millis();
+  // TODO
 }
 
 void BNO055::sendData() {

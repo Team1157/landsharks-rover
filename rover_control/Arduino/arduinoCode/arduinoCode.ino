@@ -1,5 +1,8 @@
 #include <YetAnotherPcInt.h>
 #include <TaskScheduler.h>
+#include <Servo.h>
+
+#include "parser.h"
 
 #define PAN_PWM_PIN 2
 #define PAN_ENCODER_PIN 3
@@ -27,13 +30,26 @@ unsigned long lastMotUpdates[6] = {0};
 int lastErr[6] = {0};
 int motSetpoints[6] = {0}; // Between -1000000000 and 1000000000
 
+Servo panServo;
+Servo tiltServo;
+
+byte targetTiltAngle = 90;
+byte targetPanAngle = 0;
+volatile unsigned long panEncLastPulseStart = 0;
+volatile unsigned int panEncLastPulseLength = 0;
+int panAngle;
+
 Scheduler scheduler;
 
 void driveTaskCallback();
 void stopMotors();
+void moveCameraTaskCallback();
+Task readSerialTask(10, TASK_FOREVER, &read_serial_task, &scheduler); 
 Task driveTask(20, TASK_FOREVER, &driveTaskCallback, &scheduler, false, nullptr, stopMotors);
+Task moveCameraTask(20, TASK_FOREVER, &moveCameraTaskCallback, &scheduler);
 
 void setup() {
+  // Drive motor setup
   for(byte i = 0; i < 6; i++) {
     pinMode(ENC_INT_PINS[i], INPUT);
     pinMode(ENC_DIR_PINS[i], INPUT);
@@ -51,7 +67,17 @@ void setup() {
     PcInt::attachInterrupt(ENC_INT_PINS[i], handleInterrupt, &INDICES[i], CHANGE);
   }
 
+  // Pretticam pan tilt setup
+  panServo.attach(PAN_PWM_PIN);
+  tiltServo.attach(TILT_PWM_PIN);
+
+  pinMode(PAN_ENCODER_PIN, INPUT);
+  attachInterrupt(digitalPinToInterrupt(PAN_ENCODER_PIN), panEncCallback, CHANGE);
+
   Serial.begin(115200);
+
+  readSerialTask.enable();
+  moveCameraTask.enable();
 }
 
 void handleInterrupt(byte *index, bool pinState) {
@@ -119,6 +145,45 @@ void stopMotors() {
     digitalWrite(MOT_PWM_PINS[i], LOW);
   }
 }
+
+void moveDistanceCommand(uint16_t dist, uint16_t spd, uint16_t angle) {
+  
+}
+
+void panEncCallback() {
+  if (digitalRead(PAN_ENCODER_PIN)) {
+    panEncLastPulseStart = micros();
+  } else {
+    panEncLastPulseLength = micros() - panEncLastPulseStart;
+  }
+}
+
+unsigned int pulseLength;
+void moveCameraTaskCallback() {
+  int setpoint = map(targetTiltAngle, 0, 110, 1825, 875);
+  setpoint = constrain(setpoint, 875, 1825);
+  tiltServo.writeMicroseconds(setpoint);
+
+  noInterrupts();
+  pulseLength = panEncLastPulseLength;
+  interrupts();
+  int newAngle = map(pulseLength, 29, 1045, 0, 359);
+
+  if (abs(((newAngle - panAngle + 540) % 360) - 180) < 25) {
+    panAngle = newAngle;
+  }
+
+  int err = ((targetPanAngle - panAngle + 540) % 360) - 180;
+  setpoint = 1500 - err * 3 ;
+  setpoint = constrain(setpoint, 1350, 1650);
+  panServo.writeMicroseconds(setpoint);
+}
+
+void moveCameraCommand(uint16_t yaw, uint16_t pitch) {
+  targetPanAngle = yaw;
+  targetTiltAngle = pitch;
+}
+
 
 void loop() {
   scheduler.execute();
