@@ -335,5 +335,11 @@ async def handle_point_camera(self: RoverBaseStation, _client: Client, msg: Poin
     await self.broadcast(msg, Role.ROVER)
 
 
+@message_handler(ArduinoDebugMessage, Role.DRIVER)
+async def handle_arduino_debug(self: RoverBaseStation, _client: Client, msg: ArduinoDebugMessage):
+    # Forward to rover
+    await self.broadcast(msg, Role.ROVER)
+
+
 async def default_handler(self: RoverBaseStation, client: Client, msg: Message):
     await self.log(f"Received unexpected {msg.tag_name} message from {client.user} ({client.role.name})", "warning")

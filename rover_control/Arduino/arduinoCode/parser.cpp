@@ -51,20 +51,28 @@ void execute_command() {
     }
     case 'p': { // Camera pan
       uint16_t yaw, pitch;
-      CHECK_ARGS(sscanf(command_buffer+1, "%d %d", &yaw, &pitch), 2);
+      CHECK_ARGS(sscanf(command_buffer+1, "%u %u", &yaw, &pitch), 2);
       moveCameraCommand(yaw, pitch);
       break;
     }
     case 'd': { // Move distance
       int16_t dist;
       uint16_t spd, angle;
-      CHECK_ARGS(sscanf(command_buffer+1, "%d %d %d", &dist, &spd, &angle), 3);
+      CHECK_ARGS(sscanf(command_buffer+1, "%d %u %u", &dist, &spd, &angle), 3);
       moveDistanceCommand(dist, spd, angle);
       break;
     }
     case 'c': { // Move continuous
       uint16_t spd, angle;
-      CHECK_ARGS(sscanf(command_buffer+1,"%d %d", &spd, &angle), 3);
+      CHECK_ARGS(sscanf(command_buffer+1,"%u %u", &spd, &angle), 3);
+      // TODO
+      break;
+    }
+    case 'x': { // Cancel command
+      // TODO
+      break;
+    }
+    case '!': { // E-stop
       // TODO
       break;
     }

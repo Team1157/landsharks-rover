@@ -167,9 +167,16 @@ class PointCameraMessage(Message):
     """Sets the target camera pointing direction"""
     tag_name = "point_camera"
 
-    yaw: serde.fields.Float()
-    pitch: serde.fields.Float()
+    yaw: serde.fields.Int()
+    pitch: serde.fields.Int()
     relative: serde.fields.Bool() = False
+
+
+class ArduinoDebugMessage(Message):
+    """Sends a raw message to the Arduino"""
+    tag_name = "arduino_debug"
+
+    message: serde.fields.Bytes()
 
 
 # Extension method
@@ -200,5 +207,6 @@ __all__ = [
     "SensorDataMessage",
     "QueryBaseMessage",
     "QueryBaseResponseMessage",
-    "PointCameraMessage"
+    "PointCameraMessage",
+    "ArduinoDebugMessage"
 ]

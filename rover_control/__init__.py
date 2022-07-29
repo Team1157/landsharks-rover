@@ -4,6 +4,7 @@ import os
 import time
 import typing as t
 import traceback
+import re
 
 import serde.exceptions
 import websockets
@@ -28,6 +29,9 @@ class Sandshark:
         self.serial_reader: t.Optional[asyncio.StreamReader] = None
         self.serial_writer: t.Optional[asyncio.StreamWriter] = None
 
+        self.camera_yaw = 0
+        self.camera_pitch = 0
+
         self.options = {
             "navicam.enabled": False,
             "prettycam.enabled": False,
@@ -36,7 +40,7 @@ class Sandshark:
 
     async def report_pi_sensors_task(self):
         while True:
-            if self.sck is not None and self.sck.open:
+            if self.sck and self.sck.open:
                 # Get various pi stat values
                 ram = psutil.virtual_memory()
                 disk = psutil.disk_usage("/")
@@ -60,7 +64,7 @@ class Sandshark:
         # Start serial listener
         asyncio.create_task(self.serial_main())
 
-        # async for sck in websockets.connect("ws://rover.team1157.org:11571/rover", ping_interval=5, ping_timeout=10):
+        # async for sck in websockets.connect("wss://rover.team1157.org:11571/rover", ping_interval=5, ping_timeout=10):
         async for self.sck in websockets.connect("ws://127.0.0.1:11571/rover", ping_interval=5, ping_timeout=10):
             # Authenticate
             await self.sck.send_msg(AuthMessage(token="DUMMY_TOKEN"))
@@ -85,13 +89,14 @@ class Sandshark:
 
                             # Delegate to message handler
                             await message_handlers.get(msg.__class__, default_handler)(self, msg)
+
                     except Exception as e:
                         # Re-raise ConnectionClosed
                         if isinstance(e, websockets.ConnectionClosed):
                             raise e
 
                         print(f"Uncaught exception in main(): {e!r}")
-                        if self.sck.open:
+                        if self.sck and self.sck.open:
                             await self.sck.send_msg(LogMessage(
                                 message=f"Rover error in main(): {e!r}: {traceback.format_exc()}",
                                 level="error"
@@ -110,15 +115,19 @@ class Sandshark:
 
                 while True:
                     try:
-                        line = await self.serial_reader.readline()
-                        print(line)
+                        msg = await self.serial_reader.readline().decode()
+                        msg_type = re.match(r"^(\w+) ", msg)[1]
+
+                        # Delegate to message handler
+                        await arduino_handlers.get(msg_type, arduino_default)(self, msg)
+
                     except Exception as e:
                         # Re-raise SerialException
                         if isinstance(e, serial.SerialException):
                             raise e
 
                         print(f"Uncaught exception in serial_main(): {e!r}")
-                        if self.sck.open:
+                        if self.sck and self.sck.open:
                             await self.sck.send_msg(LogMessage(
                                 message=f"Rover error in serial_main(): {e!r}: {traceback.format_exc()}",
                                 level="error"
@@ -126,7 +135,7 @@ class Sandshark:
             except serial.SerialException:
                 self.serial_connected = False
                 print("Disconnected from arduino, reconnecting in 5 seconds...")
-                if self.sck.open:
+                if self.sck and self.sck.open:
                     await self.sck.send_msg(LogMessage(
                         message=f"Disconnected from arduino with error: {traceback.format_exc()}",
                         level="error"
@@ -147,14 +156,21 @@ def message_handler(message_type: t.Type):
 @message_handler(CommandMessage)
 async def handle_command(self: Sandshark, msg: CommandMessage):
     if self.current_command is not None:
-        # TODO cancel command
-        if self.sck.open:
-            await self.sck.send_msg(CommandEndedMessage(command=self.current_command), completed=False)
+        if self.serial_connected:
+            self.serial_writer.write(b"x\n")
+            await self.serial_writer.drain()
+            if self.sck and self.sck.open:
+                await self.sck.send_msg(CommandEndedMessage(command=self.current_command), completed=False)
+        elif self.sck and self.sck.open:
+            await self.sck.send_msg(LogMessage(
+                message="Could not cancel current command because Arduino is not connected",
+                level="error"
+            ))
     self.current_command = msg.command
     if msg.command is not None:
         if self.serial_connected:
             self.serial_writer.write(self.current_command.to_arduino())
-        elif self.sck.open:
+        elif self.sck and self.sck.open:
             await self.sck.send_msg(LogMessage(
                 message="Could not set command because Arduino is not connected",
                 level="error"
@@ -173,19 +189,45 @@ async def handle_option(self: Sandshark, msg: OptionMessage):
 
 
 @message_handler(EStopMessage)
-async def handle_estop(self: Sandshark, msg: EStopMessage):
-    # TODO
-    pass
+async def handle_estop(self: Sandshark, _msg: EStopMessage):
+    # Forward E-stop
+    if self.serial_connected:
+        self.serial_writer.write(b"!\n")
+        await self.serial_writer.drain()
+    elif self.sck and self.sck.open:
+        await self.sck.send_msg(LogMessage(
+            message="Could not handle E-stop because Arduino is not connected",
+            level="error"
+        ))
+
+    if self.current_command is not None:
+        if self.sck and self.sck.open:
+            await self.sck.send_msg(CommandEndedMessage(command=self.current_command, completed=False))
+        self.current_command = None
 
 
 @message_handler(PointCameraMessage)
 async def handle_point_camera(self: Sandshark, msg: PointCameraMessage):
-    # TODO
-    pass
+    if msg.relative:
+        self.camera_yaw += msg.yaw
+        self.camera_pitch += msg.pitch
+    else:
+        self.camera_yaw = msg.yaw
+        self.camera_pitch = msg.pitch
+
+    if self.serial_connected:
+        self.serial_writer.write(f"p{self.camera_yaw} {self.camera_pitch}".encode())
+        await self.serial_writer.drain()
+    elif self.sck and self.sck.open:
+        await self.sck.send_msg(LogMessage(
+            message="Unable to point camera because Arduino disconnected",
+            level="error"
+        ))
 
 
 async def default_handler(self: Sandshark, msg: Message):
-    await self.sck.send_msg(LogMessage(message=f"Received unexpected {msg.tag_name} message", level="warning"))
+    if self.sck and self.sck.open:
+        await self.sck.send_msg(LogMessage(message=f"Received unexpected {msg.tag_name} message", level="warning"))
 
 
 command_handlers = {}
@@ -200,6 +242,54 @@ def command_handler(command_type: t.Type):
 @command_handler(MoveDistanceCommand)
 async def move_distance_command(self: Sandshark, cmd: MoveDistanceCommand):
     pass
+
+
+arduino_handlers = {}
+
+
+def arduino_handler(message_type: str):
+    def decorate(fn: t.Callable[[Sandshark, str], t.Coroutine]):
+        arduino_handlers[message_type] = fn
+    return decorate
+
+
+@arduino_handler("echo")
+async def arduino_echo(self: Sandshark, msg: str):
+    # Log echo
+    m = re.match(r"^echo (.*)$", msg)
+    if self.sck and self.sck.open:
+        self.sck.send_msg(LogMessage(message=f"Received echo from Arduino: {m[1]}", level="info"))
+
+
+@arduino_handler("log")
+async def arduino_log(self: Sandshark, msg: str):
+    # Echo log to network
+    m = re.match(r"^log (\w+) (.*)$", msg)
+    if self.sck and self.sck.open:
+        self.sck.send_msg(LogMessage(message=m[2], level=m[1]))
+
+
+@arduino_handler("completed")
+async def arduino_completed(self: Sandshark, _msg: str):
+    # Alert network of command completion
+    if self.sck and self.sck.open:
+        self.sck.send_msg(CommandEndedMessage(command=self.current_command, completed=True))
+    self.current_command = None
+
+
+@arduino_handler("data")
+async def arduino_data(self: Sandshark, msg: str):
+    m = re.match(r"^data (\w+)(?: (.+))+", msg)
+    match m[1]:
+        case _: pass
+    # TODO
+
+    self.sck.send_msg(SensorDataMessage(sensor=m[1]))
+
+
+async def arduino_default(self: Sandshark, msg: str):
+    if self.sck and self.sck.open:
+        self.sck.send_msg(LogMessage(message=f"Received unexpected message from Arduino: {msg}", level="error"))
 
 
 def collect_sensors():
