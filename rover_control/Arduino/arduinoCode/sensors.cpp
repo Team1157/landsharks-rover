@@ -2,6 +2,7 @@
 #include <Bme280.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
+#include <Adafruit_INA260.h>
 
 #include "sensors.h"
 
@@ -42,7 +43,15 @@ Sensor(sensorName){
 }
 
 void BNO055::poll() {
-  // TODO
+  bno.getEvent(&event, Adafruit_BNO055::VECTOR_EULER);
+  Serial.print("x: ");
+  Serial.println(event->x);
+  Serial.print("y: ");
+  Serial.println(event->x);
+  Serial.print("z: ");
+  Serial.println(event->x);
+  bno.getEvent(&event, Adafruit_BNO055::VECTOR_LINEARACCEL);
+  lastData.temp = bno.getTemp();
 }
 
 void BNO055::sendData() {
@@ -52,7 +61,8 @@ void BNO055::sendData() {
     String(lastData.z_accel, 2) +
     String(lastData.roll, 2) +
     String(lastData.pitch, 2) +
-    String(lastData.yaw, 2)
+    String(lastData.yaw, 2) +
+    String(lastData.temp)
   );
 }
 
@@ -66,5 +76,22 @@ void AnalogCurrent::poll() {
 void AnalogCurrent::sendData() {
   Serial.println("data " + sensorName +
     String(current)
+  );
+}
+
+INA260::INA260(String sensorName):
+Sensor(sensorName) {
+  ina.begin();
+}
+
+void INA260::poll() {
+  voltage = ina.readBusVoltage();
+  current = ina.readCurrent();
+}
+
+void INA260::sendData() {
+  Serial.println("data " + sensorName +
+    String(voltage, 2) +
+    String(current, 2)
   );
 }

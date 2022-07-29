@@ -2,6 +2,7 @@
 
 #include <Bme280.h>
 #include <Adafruit_BNO055.h>
+#include <Adafruit_INA260.h>
 
 class Sensor {
   public:
@@ -42,12 +43,14 @@ class BNO055: public Sensor {
       float roll;
       float pitch;
       float yaw;
+      int8_t temp;
     } lastData;
   
     BNO055(String sensorName);
 
   private:
     Adafruit_BNO055 bno;
+    sensors_event_t event;
 
     void poll();
     void sendData();
@@ -59,6 +62,20 @@ class AnalogCurrent: public Sensor {
     AnalogCurrent(String sensorName);
 
   private:
+    void poll();
+    void sendData();
+};
+
+class INA260: public Sensor {
+  public:
+    float voltage; // Volts
+    float current; // Amps
+    
+    INA260(String sensorName);
+
+  private:
+    Adafruit_INA260 ina;
+  
     void poll();
     void sendData();
 };

@@ -69,11 +69,11 @@ void execute_command() {
       break;
     }
     case 'x': { // Cancel command
-      // TODO
+      eStopCommand();
       break;
     }
     case '!': { // E-stop
-      // TODO
+      eStopCommand();
       break;
     }
     default: {

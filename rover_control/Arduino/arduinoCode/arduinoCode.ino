@@ -10,13 +10,13 @@
 #define TILT_PWM_PIN 12
 #define PANEL_CURRENT_PIN A0
 
-// Drive motos
 const byte ENC_INT_PINS[] = {62, 63, 64, 65, 66, 67}, //main triggers for the encoder interrupts
            ENC_DIR_PINS[] = {22, 23, 24, 25, 26, 27}, //secondary encoder pins for finding direction
            MOT_PWM_PINS[] = { 4,  7,  9,  8, 10, 11}, //pwm outputs for motors
            MOT_DIR_PINS[] = {53, 52, 51, 50, 49, 48}, //directional select for motors
            PIR_PINS[] = {10, 11, 12, 13};
 
+// Drive motors
 const bool INVERT_MOTORS[] = { 0,  1,  0,  1,  0,  1}; // A 1 indicates a motor is inverted
 
 const int MOT_P_GAIN = 0;
@@ -40,6 +40,7 @@ BME280 internalBme("internal_bme", false);
 BME280 externalBme("external_bme", true);
 BNO055 bno("imu");
 AnalogCurrent loadCurrent("load_currnet");
+INA260 panelIna("panel_power");
 
 // Tasks
 Scheduler scheduler;
@@ -47,7 +48,7 @@ Scheduler scheduler;
 void driveTaskCallback();
 void onDriveEnd();
 void moveCameraTaskCallback();
-Task readSerialTask(10, TASK_FOREVER, &read_serial_task, &scheduler); 
+Task readSerialTask(20, TASK_FOREVER, &read_serial_task, &scheduler); 
 Task driveTask(20, TASK_FOREVER, &driveTaskCallback, &scheduler, false, nullptr, onDriveEnd);
 Task moveCameraTask(20, TASK_FOREVER, &moveCameraTaskCallback, &scheduler);
 
@@ -55,6 +56,7 @@ Task internalBmeTask(5000, TASK_FOREVER, [](){ internalBme.callback(); }, &sched
 Task externalBmeTask(5000, TASK_FOREVER, [](){ externalBme.callback(); }, &scheduler);
 Task imuTask(500, TASK_FOREVER, [](){ bno.callback(); }, &scheduler);
 Task loadCurrentTask(500, TASK_FOREVER, [](){ loadCurrent.callback(); }, &scheduler);
+Task panelInaTask(500, TASK_FOREVER, [](){ panelIna.callback(); }, &scheduler );
 
 void setup() {
   // Drive motor setup
@@ -91,6 +93,7 @@ void setup() {
   externalBmeTask.enable();
   imuTask.enable();
   loadCurrentTask.enable();
+  panelInaTask.enable();
 }
 
 void loop() {
@@ -146,7 +149,7 @@ void updateMotorController(uint8_t index, int16_t setpoint) { // Target velocity
 
   // Write setpoint to motor
   digitalWrite(MOT_DIR_PINS[index], motSetpoints[index] < 0);
-  analogWrite(MOT_PWM_PINS[index], abs(motSetpoints[index]) * 255 / 1000000000);
+  analogWrite(MOT_PWM_PINS[index], abs(motSetpoints[index]) / 3906250); // * 256 / 1000000000
 }
 
 void resetController(uint8_t index) {
@@ -173,6 +176,7 @@ void driveTaskCallback() {
     }
     if (abs(encCount[0] + encCount[2] + encCount[4]) >= 3 * abs(targetLeftClicks) || abs(encCount[1] + encCount[3] + encCount[5]) >= 3 * abs(targetRightClicks)) {
       driveTask.disable();
+      Serial.println("completed");
       return;
     }
   }
@@ -209,6 +213,13 @@ void moveDistanceCommand(int16_t dist, uint16_t spd, uint16_t angle) {
 
   targetLeftVelocity = targetLeftClicks * 1000 / duration;
   targetRightVelocity = targetRightClicks * 1000 / duration;
+
+  driveTask.enable();
+}
+
+void eStopCommand() {
+  driveTask.disable();
+  stopMotors();
 }
 
 //============= MOVE CAMERA =============
