@@ -1,39 +1,30 @@
 #pragma once
 
-#include <TaskSchedulerDeclarations.h>
-
-namespace sensor {
+#include <Bme280.h>
+#include <Adafruit_BNO055.h>
 
 class Sensor {
   public:
-    struct SensorData {
-      unsigned long timestamp; // millis since startup
-    } lastData;
-
-    Task pollTask;
-
-    Sensor(Scheduler scheduler, String sensorName, int pollInterval);
-    void periodic();
-    void setEnabled(bool enable);
+    Sensor(String sensorName);
+    void callback();
 
   protected:
     String sensorName;
     
   private:
-    void poll();
-    void sendData();
-    void callback();
+    virtual void poll() = 0;
+    virtual void sendData() = 0;
 };
 
-class BME280: Sensor {
+class BME280: public Sensor {
   public:
-    struct BME280Data: SensorData {
+    struct BME280Data {
       float temp; // Degrees Celcius
       float humidity; // %
       float pressure; // Pascals
     } lastData;
 
-    BME280(Scheduler scheduler, String sensorName, int messageInterval = 5000, bool altAddress = false);
+    BME280(String sensorName, bool altAddress = false);
 
   private:
     Bme280TwoWire bme;
@@ -42,18 +33,18 @@ class BME280: Sensor {
     void sendData();
 };
 
-class BNO055: Sensor {
+class BNO055: public Sensor {
   public:
-    struct BNO055Data: SensorData {
-      double x_accel;
-      double y_accel;
-      double z_accel;
-      double roll;
-      double pitch;
-      double yaw;
+    struct BNO055Data {
+      float x_accel;
+      float y_accel;
+      float z_accel;
+      float roll;
+      float pitch;
+      float yaw;
     } lastData;
   
-    BNO055(Scheduler scheduler, String sensorName, int pollInterval = 5000);
+    BNO055(String sensorName);
 
   private:
     Adafruit_BNO055 bno;
@@ -62,4 +53,12 @@ class BNO055: Sensor {
     void sendData();
 };
 
-}
+class AnalogCurrent: public Sensor {
+  public:
+    int current; // in deciamps
+    AnalogCurrent(String sensorName);
+
+  private:
+    void poll();
+    void sendData();
+};

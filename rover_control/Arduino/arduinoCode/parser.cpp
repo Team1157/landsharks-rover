@@ -56,7 +56,8 @@ void execute_command() {
       break;
     }
     case 'd': { // Move distance
-      uint16_t dist, spd, angle;
+      int16_t dist;
+      uint16_t spd, angle;
       CHECK_ARGS(sscanf(command_buffer+1, "%d %d %d", &dist, &spd, &angle), 3);
       moveDistanceCommand(dist, spd, angle);
       break;
