@@ -114,7 +114,10 @@ class Sandshark:
     async def serial_main(self):
         while True:
             try:
-                self.serial_reader, self.serial_writer = await serial_asyncio.open_serial_connection(url="COM5", baudrate=115200)
+                self.serial_reader, self.serial_writer = await serial_asyncio.open_serial_connection(
+                    url="COM5",
+                    baudrate=115200
+                )
                 self.serial_connected = True
 
                 while True:
@@ -236,7 +239,7 @@ def command_handler(command_type: t.Type):
 
 
 @command_handler(MoveDistanceCommand)
-async def move_distance_command(self: Sandshark, cmd: MoveDistanceCommand):
+async def move_distance_command(_self: Sandshark, _cmd: MoveDistanceCommand):
     pass
 
 
@@ -273,42 +276,43 @@ async def arduino_completed(self: Sandshark, _msg: str):
 
 @arduino_handler("data")
 async def arduino_data(self: Sandshark, msg: str):
-    time_ = time.time_ns
-    m = re.match(r"^data (\w+)(?: (.+))+", msg)
-    match m[1]:
-        case "internal_bme", "external_bme":
-            meas = {
-                "temp": float(m[2]),
-                "humidity": float(m[3]),
-                "pressure": int(m[4])
-            }
-
-        case "imu":
-            meas = {
-                "x_accel": float(m[2]),
-                "y_accel": float(m[3]),
-                "z_accel": float(m[4]),
-                "roll": float(m[5]),
-                "pitch": float(m[6]),
-                "yaw": float(m[7]),
-                "temp": int(m[8])
-            }
-
-        case "load_current":
-            meas = {
-                "current": int(m[2])
-            }
-
-        case "panel_power":
-            meas = {
-                "voltage": float(m[2]),
-                "current": float(m[3])
-            }
-        case x:
-            await self.log(f"Received unknown sensor from Arduino: {x}")
-            return
-
     if self.sck and self.sck.open:
+        time_ = time.time_ns
+        m = re.match(r"^data (\w+) (.*)$", msg)
+        raw_meas = m[2].split(" ")
+        match m[1]:
+            case "internal_bme", "external_bme":
+                meas = {
+                    "temp": float(raw_meas[0]),
+                    "humidity": float(raw_meas[1]),
+                    "pressure": int(raw_meas[2])
+                }
+
+            case "imu":
+                meas = {
+                    "x_accel": float(raw_meas[0]),
+                    "y_accel": float(raw_meas[1]),
+                    "z_accel": float(raw_meas[2]),
+                    "roll": float(raw_meas[3]),
+                    "pitch": float(raw_meas[4]),
+                    "yaw": float(raw_meas[5]),
+                    "temp": int(raw_meas[6])
+                }
+
+            case "load_current":
+                meas = {
+                    "current": int(raw_meas[0])
+                }
+
+            case "panel_power":
+                meas = {
+                    "voltage": float(raw_meas[0]),
+                    "current": float(raw_meas[1])
+                }
+            case x:
+                await self.log(f"Received unknown sensor data from Arduino: {x}")
+                return
+
         await self.sck.send_msg(SensorDataMessage(
             time=time_,
             sensor=m[1],
@@ -319,47 +323,3 @@ async def arduino_data(self: Sandshark, msg: str):
 async def arduino_default(self: Sandshark, msg: str):
     if self.sck and self.sck.open:
         self.sck.send_msg(LogMessage(message=f"Received unexpected message from Arduino: {msg}", level="error"))
-
-
-def collect_sensors():
-    _dummy = 0.0
-    # Get various pi stat values
-    ram = psutil.virtual_memory()
-    disk = psutil.disk_usage("/")
-    # psutil.sensors_temperatures only exists on Linux
-    if "sensors_temperatures" in psutil.__all__:
-        cpu_temp = psutil.sensors_temperatures()["coretemp"][0].current
-    else:
-        cpu_temp = _dummy
-    this_proc = psutil.Process(os.getpid())
-    return {
-        "pi": {
-            "cpu_percent": psutil.cpu_percent(),
-            "cpu_temp": cpu_temp,
-            "ram_percent": ram.percent,
-            "ram_free": ram.available,
-            "disk_percent": disk.percent,
-            "disk_free": disk.free,
-            "ctl_ram_used": this_proc.memory_full_info().uss
-        },
-        "gps": {
-            "latitude": _dummy,
-            "longitude": _dummy,
-            "satellites": _dummy
-        },
-        "imu": {
-            "gyro_x": _dummy,
-            "gyro_y": _dummy,
-            "gyro_z": _dummy,
-            "acc_x": _dummy,
-            "acc_y": _dummy,
-            "acc_z": _dummy,
-            "mag_x": _dummy,
-            "mag_y": _dummy,
-            "mag_z": _dummy
-        },
-        "battery": {
-            "voltage": _dummy,
-            "current": _dummy
-        }
-    }
