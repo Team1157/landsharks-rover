@@ -209,7 +209,7 @@ void moveDistanceCommand(int16_t dist, uint16_t spd, uint16_t angle) {
   targetLeftClicks = leftDistance * 9597 / 12275; // leftDistance / (152.4 mm * 2pi) * (748.65 clicks per revolution
   targetRightClicks = rightDistance * 9597 / 12275;
 
-  int32_t duration = dist * 1000 / spd; // in ms
+  int32_t duration = (abs(leftDistance) + abs(rightDistance)) * 500 / spd; // in ms
 
   targetLeftVelocity = targetLeftClicks * 1000 / duration;
   targetRightVelocity = targetRightClicks * 1000 / duration;

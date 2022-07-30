@@ -45,11 +45,11 @@ Sensor(sensorName){
 void BNO055::poll() {
   bno.getEvent(&event, Adafruit_BNO055::VECTOR_EULER);
   Serial.print("x: ");
-  Serial.println(event->x);
+  Serial.println(event.orientation.x);
   Serial.print("y: ");
-  Serial.println(event->x);
+  Serial.println(event.orientation.y);
   Serial.print("z: ");
-  Serial.println(event->x);
+  Serial.println(event.orientation.z);
   bno.getEvent(&event, Adafruit_BNO055::VECTOR_LINEARACCEL);
   lastData.temp = bno.getTemp();
 }

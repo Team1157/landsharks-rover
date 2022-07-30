@@ -22,11 +22,12 @@ p {
 }
 
 h1 {
-  margin:8px;
+  margin:15px;
   padding:0;
   color: #D65A31;
   font-family: monospace;
   font-size: 24px;
+  text-align: center;
 }
 
 .clear {
@@ -42,8 +43,7 @@ h1 {
 
 #sidebarleft, #sidebarright {
  background-color: #393e46;
- width:325px;
- max-width:25%;
+ width:25%;
  height:100vh;
  position: relative;
 }
@@ -56,7 +56,7 @@ h1 {
  float:right;
 }
 
-#commandqueue {
+#status {
   height: 40%;
 }
 
@@ -136,25 +136,18 @@ td:hover { background-color:#E2A490; }
 .stream { width: 100%; }
 
 #mapid {
-  position: absolute;
-  width: 200px;
-  height: 200px;
-  top: 10px;
-  right: 10px;
-}
-
-.compass {
-  position: absolute;
-  width: 100px;
-  height: 100px;
-  bottom: 10px;
-  right: 10px;
+  width: 60%;
+  height: 0;
+  padding-bottom: 60%;
+  float: right;
+  margin: 10px
 }
 
 #attitude {
-  position: absolute;
-  bottom: 0;
-  left: 0;
+  width: 60%;
+  height: 0;
+  padding-bottom: 60%;
+  float: right;
 }
 
 .dpad {
