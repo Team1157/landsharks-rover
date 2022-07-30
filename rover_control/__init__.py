@@ -38,6 +38,11 @@ class Sandshark:
 
         }
 
+    async def log(self, msg: str, level: str = "info"):
+        """Logs a message to the base station if connected"""
+        if self.sck and self.sck.open:
+            await self.sck.send_msg(LogMessage(message=msg, level=level))
+
     async def report_pi_sensors_task(self):
         while True:
             if self.sck and self.sck.open:
@@ -45,14 +50,17 @@ class Sandshark:
                 ram = psutil.virtual_memory()
                 disk = psutil.disk_usage("/")
                 this_proc = psutil.Process(os.getpid())
-                await self.sck.send_msg(SensorDataMessage(time=time.time_ns(), sensor="pi", measurements={
+                meas = {
                     "cpu_percent": psutil.cpu_percent(),
                     "ram_percent": ram.percent,
                     "ram_free": ram.available,
                     "disk_percent": disk.percent,
                     "disk_free": disk.free,
                     "ctl_ram_used": this_proc.memory_full_info().uss
-                }))
+                }
+                if hasattr(psutil, "sensors_temperatures"):
+                    meas["cpu_temp"] = psutil.sensors_temperatures()["coretemp"][0].current
+                await self.sck.send_msg(SensorDataMessage(time=time.time_ns(), sensor="pi", measurements=meas))
             await asyncio.sleep(5)
 
     async def main(self):
@@ -72,7 +80,7 @@ class Sandshark:
                 auth_response = AuthResponseMessage.from_json(await self.sck.recv())
                 self.user = auth_response.user
             except (serde.ValidationError, json.JSONDecodeError):
-                await self.sck.send_msg(LogMessage(message="Received invalid auth response", level="error"))
+                await self.log("Received invalid auth response", "error")
                 await self.sck.close(1002, "Invalid auth response")
                 continue
 
@@ -84,7 +92,7 @@ class Sandshark:
                             try:
                                 msg = Message.from_json(msg_raw)
                             except (serde.ValidationError, json.JSONDecodeError):
-                                await self.sck.send_msg(LogMessage(message="Received invalid message", level="error"))
+                                await self.log("Received invalid message", "error")
                                 continue
 
                             # Delegate to message handler
@@ -96,11 +104,7 @@ class Sandshark:
                             raise e
 
                         print(f"Uncaught exception in main(): {e!r}")
-                        if self.sck and self.sck.open:
-                            await self.sck.send_msg(LogMessage(
-                                message=f"Rover error in main(): {e!r}: {traceback.format_exc()}",
-                                level="error"
-                            ))
+                        await self.log(f"Rover error in main(): {e!r}: {traceback.format_exc()}", "error")
 
             except websockets.ConnectionClosed:
                 print("Disconnected from base station, reconnecting in 5 seconds...")
@@ -110,7 +114,10 @@ class Sandshark:
     async def serial_main(self):
         while True:
             try:
-                self.serial_reader, self.serial_writer = await serial_asyncio.open_serial_connection(url="COM5", baudrate=115200)
+                self.serial_reader, self.serial_writer = await serial_asyncio.open_serial_connection(
+                    url="COM5",
+                    baudrate=115200
+                )
                 self.serial_connected = True
 
                 while True:
@@ -127,19 +134,11 @@ class Sandshark:
                             raise e
 
                         print(f"Uncaught exception in serial_main(): {e!r}")
-                        if self.sck and self.sck.open:
-                            await self.sck.send_msg(LogMessage(
-                                message=f"Rover error in serial_main(): {e!r}: {traceback.format_exc()}",
-                                level="error"
-                            ))
+                        await self.log(f"Rover error in serial_main(): {e!r}: {traceback.format_exc()}", "error")
             except serial.SerialException:
                 self.serial_connected = False
                 print("Disconnected from arduino, reconnecting in 5 seconds...")
-                if self.sck and self.sck.open:
-                    await self.sck.send_msg(LogMessage(
-                        message=f"Disconnected from arduino with error: {traceback.format_exc()}",
-                        level="error"
-                    ))
+                await self.log(f"Disconnected from arduino with error: {traceback.format_exc()}", "error")
                 await asyncio.sleep(5)
                 continue
 
@@ -161,20 +160,15 @@ async def handle_command(self: Sandshark, msg: CommandMessage):
             await self.serial_writer.drain()
             if self.sck and self.sck.open:
                 await self.sck.send_msg(CommandEndedMessage(command=self.current_command), completed=False)
-        elif self.sck and self.sck.open:
-            await self.sck.send_msg(LogMessage(
-                message="Could not cancel current command because Arduino is not connected",
-                level="error"
-            ))
+        else:
+            await self.log("Could not cancel current command because Arduino is not connected", "error")
     self.current_command = msg.command
     if msg.command is not None:
         if self.serial_connected:
             self.serial_writer.write(self.current_command.to_arduino())
-        elif self.sck and self.sck.open:
-            await self.sck.send_msg(LogMessage(
-                message="Could not set command because Arduino is not connected",
-                level="error"
-            ))
+            await self.serial_writer.drain()
+        else:
+            await self.log("Could not set command because Arduino is not connected", "error")
 
 
 @message_handler(OptionMessage)
@@ -183,9 +177,10 @@ async def handle_option(self: Sandshark, msg: OptionMessage):
     self.options.update(msg.set)
 
     # Get values
-    await self.sck.send_msg(OptionResponseMessage(
-        values={k: self.options[k] for k in set(msg.set.keys()).union(msg.get)}
-    ))
+    if self.sck and self.sck.open:
+        await self.sck.send_msg(OptionResponseMessage(
+            values={k: self.options[k] for k in set(msg.set.keys()).union(msg.get)}
+        ))
 
 
 @message_handler(EStopMessage)
@@ -194,11 +189,8 @@ async def handle_estop(self: Sandshark, _msg: EStopMessage):
     if self.serial_connected:
         self.serial_writer.write(b"!\n")
         await self.serial_writer.drain()
-    elif self.sck and self.sck.open:
-        await self.sck.send_msg(LogMessage(
-            message="Could not handle E-stop because Arduino is not connected",
-            level="error"
-        ))
+    else:
+        await self.log("Could not handle E-stop because Arduino is not connected", "error")
 
     if self.current_command is not None:
         if self.sck and self.sck.open:
@@ -218,11 +210,18 @@ async def handle_point_camera(self: Sandshark, msg: PointCameraMessage):
     if self.serial_connected:
         self.serial_writer.write(f"p{self.camera_yaw} {self.camera_pitch}".encode())
         await self.serial_writer.drain()
-    elif self.sck and self.sck.open:
-        await self.sck.send_msg(LogMessage(
-            message="Unable to point camera because Arduino disconnected",
-            level="error"
-        ))
+    else:
+        await self.log("Unable to point camera because Arduino disconnected", "error")
+
+
+@message_handler(ArduinoDebugMessage)
+async def handle_arduino_debug(self: Sandshark, msg: ArduinoDebugMessage):
+    # Send to arduino as raw
+    if self.serial_connected:
+        self.serial_writer.write(msg.message + b"\n")
+        await self.serial_writer.drain()
+    else:
+        await self.log("Unable to send debug because Arduino disconnected", "error")
 
 
 async def default_handler(self: Sandshark, msg: Message):
@@ -240,7 +239,7 @@ def command_handler(command_type: t.Type):
 
 
 @command_handler(MoveDistanceCommand)
-async def move_distance_command(self: Sandshark, cmd: MoveDistanceCommand):
+async def move_distance_command(_self: Sandshark, _cmd: MoveDistanceCommand):
     pass
 
 
@@ -257,16 +256,14 @@ def arduino_handler(message_type: str):
 async def arduino_echo(self: Sandshark, msg: str):
     # Log echo
     m = re.match(r"^echo (.*)$", msg)
-    if self.sck and self.sck.open:
-        self.sck.send_msg(LogMessage(message=f"Received echo from Arduino: {m[1]}", level="info"))
+    await self.log(f"Received echo from Arduino: {m[1]}", "info")
 
 
 @arduino_handler("log")
 async def arduino_log(self: Sandshark, msg: str):
     # Echo log to network
     m = re.match(r"^log (\w+) (.*)$", msg)
-    if self.sck and self.sck.open:
-        self.sck.send_msg(LogMessage(message=m[2], level=m[1]))
+    await self.log(f"Arduino: {m[2]}", m[1])
 
 
 @arduino_handler("completed")
@@ -279,58 +276,50 @@ async def arduino_completed(self: Sandshark, _msg: str):
 
 @arduino_handler("data")
 async def arduino_data(self: Sandshark, msg: str):
-    m = re.match(r"^data (\w+)(?: (.+))+", msg)
-    match m[1]:
-        case _: pass
-    # TODO
+    if self.sck and self.sck.open:
+        time_ = time.time_ns
+        m = re.match(r"^data (\w+) (.*)$", msg)
+        raw_meas = m[2].split(" ")
+        match m[1]:
+            case "internal_bme", "external_bme":
+                meas = {
+                    "temp": float(raw_meas[0]),
+                    "humidity": float(raw_meas[1]),
+                    "pressure": int(raw_meas[2])
+                }
 
-    self.sck.send_msg(SensorDataMessage(sensor=m[1]))
+            case "imu":
+                meas = {
+                    "x_accel": float(raw_meas[0]),
+                    "y_accel": float(raw_meas[1]),
+                    "z_accel": float(raw_meas[2]),
+                    "roll": float(raw_meas[3]),
+                    "pitch": float(raw_meas[4]),
+                    "yaw": float(raw_meas[5]),
+                    "temp": int(raw_meas[6])
+                }
+
+            case "load_current":
+                meas = {
+                    "current": int(raw_meas[0])
+                }
+
+            case "panel_power":
+                meas = {
+                    "voltage": float(raw_meas[0]),
+                    "current": float(raw_meas[1])
+                }
+            case x:
+                await self.log(f"Received unknown sensor data from Arduino: {x}")
+                return
+
+        await self.sck.send_msg(SensorDataMessage(
+            time=time_,
+            sensor=m[1],
+            measurements=meas
+        ))
 
 
 async def arduino_default(self: Sandshark, msg: str):
     if self.sck and self.sck.open:
         self.sck.send_msg(LogMessage(message=f"Received unexpected message from Arduino: {msg}", level="error"))
-
-
-def collect_sensors():
-    _dummy = 0.0
-    # Get various pi stat values
-    ram = psutil.virtual_memory()
-    disk = psutil.disk_usage("/")
-    # psutil.sensors_temperatures only exists on Linux
-    if "sensors_temperatures" in psutil.__all__:
-        cpu_temp = psutil.sensors_temperatures()["coretemp"][0].current
-    else:
-        cpu_temp = _dummy
-    this_proc = psutil.Process(os.getpid())
-    return {
-        "pi": {
-            "cpu_percent": psutil.cpu_percent(),
-            "cpu_temp": cpu_temp,
-            "ram_percent": ram.percent,
-            "ram_free": ram.available,
-            "disk_percent": disk.percent,
-            "disk_free": disk.free,
-            "ctl_ram_used": this_proc.memory_full_info().uss
-        },
-        "gps": {
-            "latitude": _dummy,
-            "longitude": _dummy,
-            "satellites": _dummy
-        },
-        "imu": {
-            "gyro_x": _dummy,
-            "gyro_y": _dummy,
-            "gyro_z": _dummy,
-            "acc_x": _dummy,
-            "acc_y": _dummy,
-            "acc_z": _dummy,
-            "mag_x": _dummy,
-            "mag_y": _dummy,
-            "mag_z": _dummy
-        },
-        "battery": {
-            "voltage": _dummy,
-            "current": _dummy
-        }
-    }

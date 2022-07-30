@@ -6,7 +6,11 @@
 
 #include "sensors.h"
 
-Sensor::Sensor(String sensorName) {
+// Shared format buffer. Since each usage of this buffer will print it immediately after formatting, it's ok to share.
+// I've made it static to avoid having large strings on the stack.
+char fmt_buf[256];
+
+Sensor::Sensor(char* sensorName) {
   this->sensorName = sensorName;
 }
 
@@ -15,7 +19,7 @@ void Sensor::callback() {
   sendData();
 }
 
-BME280::BME280(String sensorName, bool altAddress):
+BME280::BME280(char* sensorName, bool altAddress):
 Sensor(sensorName) {
   Bme280TwoWireAddress addr = altAddress ? Bme280TwoWireAddress::Secondary : Bme280TwoWireAddress::Primary;
   Wire.begin((char) addr);
@@ -29,14 +33,18 @@ void BME280::poll() {
 }
 
 void BME280::sendData() {
-  Serial.println("data " + sensorName +
-    String(lastData.temp, 2) +
-    String(lastData.humidity, 2) +
-    String((int) lastData.pressure)
+  snprintf(
+    fmt_buf, 256,
+    "data %s %.2f %.2f %.0f",
+    sensorName,
+    lastData.temp,
+    lastData.humidity,
+    lastData.pressure
   );
+  Serial.println(fmt_buf);
 }
 
-BNO055::BNO055(String sensorName):
+BNO055::BNO055(char* sensorName):
 Sensor(sensorName){
   bno = Adafruit_BNO055(55, 0x28);
   bno.begin();
@@ -55,18 +63,22 @@ void BNO055::poll() {
 }
 
 void BNO055::sendData() {
-  Serial.println("data " + sensorName +
-    String(lastData.x_accel, 2) +
-    String(lastData.y_accel, 2) +
-    String(lastData.z_accel, 2) +
-    String(lastData.roll, 2) +
-    String(lastData.pitch, 2) +
-    String(lastData.yaw, 2) +
-    String(lastData.temp)
+  snprintf(
+    fmt_buf, 256,
+    "data %s %.2f %.2f %.2f %.2f %.2f %.2f %d",
+    sensorName,
+    lastData.x_accel,
+    lastData.y_accel,
+    lastData.z_accel,
+    lastData.roll,
+    lastData.pitch,
+    lastData.yaw,
+    lastData.temp
   );
+  Serial.println(fmt_buf);
 }
 
-AnalogCurrent::AnalogCurrent(String sensorName):
+AnalogCurrent::AnalogCurrent(char* sensorName):
 Sensor(sensorName) {}
 
 void AnalogCurrent::poll() {
@@ -74,12 +86,16 @@ void AnalogCurrent::poll() {
 }
 
 void AnalogCurrent::sendData() {
-  Serial.println("data " + sensorName +
-    String(current)
+  snprintf(
+    fmt_buf, 256,
+    "data %s %d",
+    sensorName,
+    current
   );
+  Serial.println(fmt_buf);
 }
 
-INA260::INA260(String sensorName):
+INA260::INA260(char* sensorName):
 Sensor(sensorName) {
   ina.begin();
 }
@@ -90,8 +106,12 @@ void INA260::poll() {
 }
 
 void INA260::sendData() {
-  Serial.println("data " + sensorName +
-    String(voltage, 2) +
-    String(current, 2)
+  snprintf(
+    fmt_buf, 256,
+    "data %s %.2f %.2f",
+    sensorName,
+    voltage,
+    current
   );
+  Serial.println(fmt_buf);
 }

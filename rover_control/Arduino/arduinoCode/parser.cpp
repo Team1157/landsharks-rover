@@ -20,13 +20,13 @@ void read_serial_task() {
   while ((r = Serial.read()) != -1) {
     if (r == '\n') {
       command_buffer[command_buf_index] = '\0';
-      command_buf_index = 0;
       if (command_buf_overrun) {
         command_buf_overrun = false;
       }
-      else {
+      else if (command_buf_index != 0) { // Don't execute for empty buffer
         execute_command();
       }
+      command_buf_index = 0;
     }
     else {
       command_buffer[command_buf_index] = r;
@@ -64,16 +64,14 @@ void execute_command() {
     }
     case 'c': { // Move continuous
       uint16_t spd, angle;
-      CHECK_ARGS(sscanf(command_buffer+1,"%u %u", &spd, &angle), 3);
+      CHECK_ARGS(sscanf(command_buffer+1, "%u %u", &spd, &angle), 2);
       // TODO
       break;
     }
-    case 'x': { // Cancel command
-      eStopCommand();
-      break;
-    }
-    case '!': { // E-stop
-      eStopCommand();
+    case 'x': // Cancel command
+    case '!': // E-stop
+    {
+      eStopCommand(); // Both cancel command and e-stop have the same functionality here
       break;
     }
     default: {

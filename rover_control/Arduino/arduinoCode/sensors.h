@@ -6,11 +6,11 @@
 
 class Sensor {
   public:
-    Sensor(String sensorName);
+    Sensor(char* sensorName);
     void callback();
 
   protected:
-    String sensorName;
+    char* sensorName;
     
   private:
     virtual void poll() = 0;
@@ -25,7 +25,7 @@ class BME280: public Sensor {
       float pressure; // Pascals
     } lastData;
 
-    BME280(String sensorName, bool altAddress = false);
+    BME280(char* sensorName, bool altAddress = false);
 
   private:
     Bme280TwoWire bme;
@@ -46,7 +46,7 @@ class BNO055: public Sensor {
       int8_t temp;
     } lastData;
   
-    BNO055(String sensorName);
+    BNO055(char* sensorName);
 
   private:
     Adafruit_BNO055 bno;
@@ -59,7 +59,7 @@ class BNO055: public Sensor {
 class AnalogCurrent: public Sensor {
   public:
     int current; // in deciamps
-    AnalogCurrent(String sensorName);
+    AnalogCurrent(char* sensorName);
 
   private:
     void poll();
@@ -71,7 +71,7 @@ class INA260: public Sensor {
     float voltage; // Volts
     float current; // Amps
     
-    INA260(String sensorName);
+    INA260(char* sensorName);
 
   private:
     Adafruit_INA260 ina;
