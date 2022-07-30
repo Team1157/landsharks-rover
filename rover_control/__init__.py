@@ -122,7 +122,7 @@ class Sandshark:
 
                 while True:
                     try:
-                        msg = await self.serial_reader.readline().decode()
+                        msg = (await self.serial_reader.readline()).decode()
                         msg_type = re.match(r"^(\w+) ", msg)[1]
 
                         # Delegate to message handler
@@ -133,7 +133,7 @@ class Sandshark:
                         if isinstance(e, serial.SerialException):
                             raise e
 
-                        print(f"Uncaught exception in serial_main(): {e!r}")
+                        print(f"Uncaught exception in serial_main(): {e!r}: {traceback.format_exc()}")
                         await self.log(f"Rover error in serial_main(): {e!r}: {traceback.format_exc()}", "error")
             except serial.SerialException:
                 self.serial_connected = False
@@ -218,7 +218,7 @@ async def handle_point_camera(self: Sandshark, msg: PointCameraMessage):
 async def handle_arduino_debug(self: Sandshark, msg: ArduinoDebugMessage):
     # Send to arduino as raw
     if self.serial_connected:
-        self.serial_writer.write(msg.message + b"\n")
+        self.serial_writer.write(msg.message.encode() + b"\n")
         await self.serial_writer.drain()
     else:
         await self.log("Unable to send debug because Arduino disconnected", "error")
@@ -274,43 +274,57 @@ async def arduino_completed(self: Sandshark, _msg: str):
     self.current_command = None
 
 
+def float_or_none(x: str) -> t.Optional[float]:
+    try:
+        return float(x)
+    except ValueError:
+        return None
+
+
+def int_or_none(x: str) -> t.Optional[int]:
+    try:
+        return int(x)
+    except ValueError:
+        return None
+
+
 @arduino_handler("data")
 async def arduino_data(self: Sandshark, msg: str):
     if self.sck and self.sck.open:
-        time_ = time.time_ns
+        time_ = time.time_ns()
         m = re.match(r"^data (\w+) (.*)$", msg)
-        raw_meas = m[2].split(" ")
+        raw_meas = m[2].strip().split(" ")
         match m[1]:
-            case "internal_bme", "external_bme":
+            case "internal_bme" | "external_bme":
                 meas = {
-                    "temp": float(raw_meas[0]),
-                    "humidity": float(raw_meas[1]),
-                    "pressure": int(raw_meas[2])
+                    "temp": float_or_none(raw_meas[0]),
+                    "humidity": float_or_none(raw_meas[1]),
+                    "pressure": int_or_none(raw_meas[2])
                 }
 
             case "imu":
                 meas = {
-                    "x_accel": float(raw_meas[0]),
-                    "y_accel": float(raw_meas[1]),
-                    "z_accel": float(raw_meas[2]),
-                    "roll": float(raw_meas[3]),
-                    "pitch": float(raw_meas[4]),
-                    "yaw": float(raw_meas[5]),
-                    "temp": int(raw_meas[6])
+                    "x_accel": float_or_none(raw_meas[0]),
+                    "y_accel": float_or_none(raw_meas[1]),
+                    "z_accel": float_or_none(raw_meas[2]),
+                    "roll": float_or_none(raw_meas[3]),
+                    "pitch": float_or_none(raw_meas[4]),
+                    "yaw": float_or_none(raw_meas[5]),
+                    "temp": int_or_none(raw_meas[6])
                 }
 
             case "load_current":
                 meas = {
-                    "current": int(raw_meas[0])
+                    "current": int_or_none(raw_meas[0])
                 }
 
             case "panel_power":
                 meas = {
-                    "voltage": float(raw_meas[0]),
-                    "current": float(raw_meas[1])
+                    "voltage": float_or_none(raw_meas[0]),
+                    "current": float_or_none(raw_meas[1])
                 }
             case x:
-                await self.log(f"Received unknown sensor data from Arduino: {x}")
+                await self.log(f"Received unknown sensor data from Arduino: {x}", "error")
                 return
 
         await self.sck.send_msg(SensorDataMessage(

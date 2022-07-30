@@ -59,8 +59,11 @@ Task loadCurrentTask(500, TASK_FOREVER, [](){ loadCurrent.callback(); }, &schedu
 Task panelInaTask(500, TASK_FOREVER, [](){ panelIna.callback(); }, &scheduler );
 
 void setup() {
+  Serial.begin(115200);
+  Serial.println("log info Arduino starting!");
+  
   // Drive motor setup
-  for(byte i = 0; i < 6; i++) {
+  for (byte i = 0; i < 6; i++) {
     pinMode(ENC_INT_PINS[i], INPUT);
     pinMode(ENC_DIR_PINS[i], INPUT);
 
@@ -84,10 +87,16 @@ void setup() {
   pinMode(PAN_ENCODER_PIN, INPUT);
   attachInterrupt(digitalPinToInterrupt(PAN_ENCODER_PIN), panEncCallback, CHANGE);
 
-  Serial.begin(115200);
-
   readSerialTask.enable();
   moveCameraTask.enable();
+
+  // Initialize and enable sensors
+  
+  internalBme.init();
+  externalBme.init();
+  bno.init();
+  loadCurrent.init();
+  panelIna.init();
 
   internalBmeTask.enable();
   externalBmeTask.enable();
@@ -97,6 +106,7 @@ void setup() {
 }
 
 void loop() {
+//  Serial.println("log debug I'm alive!!!");
   scheduler.execute();
 }
 
@@ -116,6 +126,7 @@ int16_t targetFinalAngle; // In degrees, 0 is straight ahead
 
 void handleEncInterrupt(byte *index, bool pinState) {
   encCount[*index] += encCountStep[*index] * (digitalRead((ENC_DIR_PINS[*index]) ^ pinState) * 2 - 1);
+  //Serial.println("log debug oh no, I've been interrupted");
 }
 
 int32_t newCount;

@@ -1,20 +1,21 @@
 #pragma once
 
-#include <Bme280.h>
+#include <Adafruit_BME280.h>
 #include <Adafruit_BNO055.h>
 #include <Adafruit_INA260.h>
 
 class Sensor {
   public:
     Sensor(char* sensorName);
+    void init();
     void callback();
 
   protected:
     char* sensorName;
+    virtual void sendData();
     
   private:
     virtual void poll() = 0;
-    virtual void sendData() = 0;
 };
 
 class BME280: public Sensor {
@@ -26,9 +27,11 @@ class BME280: public Sensor {
     } lastData;
 
     BME280(char* sensorName, bool altAddress = false);
+    void init();
 
   private:
-    Bme280TwoWire bme;
+    bool altAddress;
+    Adafruit_BME280 bme;
 
     void poll();
     void sendData();
@@ -47,6 +50,7 @@ class BNO055: public Sensor {
     } lastData;
   
     BNO055(char* sensorName);
+    void init();
 
   private:
     Adafruit_BNO055 bno;
@@ -72,6 +76,7 @@ class INA260: public Sensor {
     float current; // Amps
     
     INA260(char* sensorName);
+    void init();
 
   private:
     Adafruit_INA260 ina;

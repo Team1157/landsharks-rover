@@ -176,7 +176,7 @@ class ArduinoDebugMessage(Message):
     """Sends a raw message to the Arduino"""
     tag_name = "arduino_debug"
 
-    message: serde.fields.Bytes()
+    message: serde.fields.Str()
 
 
 # Extension method
