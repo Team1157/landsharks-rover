@@ -39,7 +39,7 @@ int panAngle;
 BME280 internalBme("internal_bme", false);
 BME280 externalBme("external_bme", true);
 BNO055 bno("imu");
-AnalogCurrent loadCurrent("load_currnet");
+AnalogCurrent loadCurrent("load_current");
 INA260 panelIna("panel_power");
 
 // Tasks
