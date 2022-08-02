@@ -115,7 +115,7 @@ class Sandshark:
         while True:
             try:
                 self.serial_reader, self.serial_writer = await serial_asyncio.open_serial_connection(
-                    url="COM5",
+                    url="COM5",  # TODO Change to "/dev/ttyS0" for deployment
                     baudrate=115200
                 )
                 self.serial_connected = True
@@ -304,13 +304,10 @@ async def arduino_data(self: Sandshark, msg: str):
 
             case "imu":
                 meas = {
-                    "x_accel": float_or_none(raw_meas[0]),
-                    "y_accel": float_or_none(raw_meas[1]),
-                    "z_accel": float_or_none(raw_meas[2]),
-                    "roll": float_or_none(raw_meas[3]),
-                    "pitch": float_or_none(raw_meas[4]),
-                    "yaw": float_or_none(raw_meas[5]),
-                    "temp": int_or_none(raw_meas[6])
+                    "roll": float_or_none(raw_meas[0]),
+                    "pitch": float_or_none(raw_meas[1]),
+                    "yaw": float_or_none(raw_meas[2]),
+                    "temp": int_or_none(raw_meas[3])
                 }
 
             case "load_current":

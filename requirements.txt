@@ -4,3 +4,4 @@ pyserial-asyncio  # For communication between Raspberry Pi and Arduino on rover
 psutil~=5.9.1
 click  # For `rover_user` command-line utility
 serde~=0.8.1
+pyserial~=3.5
