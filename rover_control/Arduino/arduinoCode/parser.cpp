@@ -51,6 +51,9 @@ void read_serial_task() {
 void execute_command() {
   // Read the command specifier
   switch (command_buffer[0]) {
+    case 'h': { // Heartbeat
+      Serial.println("hb");
+    }
     case 'e': { // Echo
       // Return rest of buffer raw
       Serial.print("echo ");
