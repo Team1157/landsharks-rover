@@ -64,17 +64,23 @@ class RoverBaseStation:
 
         # Connect to sensor data database and initialize
         self.db = sqlite3.connect(module_path / "sensor_data" / "data.db")
-        cur = self.db.cursor()
-        cur.execute("""
+        self.db.executescript("""
+            begin;
             create table if not exists sensors (
                 id integer primary key autoincrement,
-                time text,
+                time integer,
                 sensor text,
                 measurement text,
                 value float
-            )
+            );
+            
+            create table if not exists nmea (
+                id integer primary key autoincrement,
+                time integer,
+                sentence text
+            );
+            commit;
         """)
-        self.db.commit()
 
         # Load user authentication "database"
         try:
@@ -304,12 +310,13 @@ async def handle_option_response(self: RoverBaseStation, _client: Client, msg: O
 async def handle_sensor_data(self: RoverBaseStation, _client: Client, msg: SensorDataMessage):
     # Forward to drivers
     await self.broadcast(msg, Role.DRIVER)
-    cur = self.db.cursor()
-    for measurement, value in msg.measurements.items():
-        cur.execute("""
+    self.db.executemany(
+        """
             insert into sensors (time, sensor, measurement, value)
             values (?, ?, ?, ?)
-        """, (msg.time, msg.sensor, measurement, value))
+        """,
+        ((msg.time, msg.sensor, measurement, value) for measurement, value in msg.measurements.items())
+    )
     self.db.commit()
 
 
@@ -319,7 +326,14 @@ async def handle_query_base(self: RoverBaseStation, client: Client, msg: QueryBa
         case "clients":
             await client.sck.send_msg(QueryBaseResponseMessage(
                 query=msg.query,
-                value=[{"user": client.user, "ip": client.sck.remote_address, "role": client.role.name} for client in self.clients]
+                value=[
+                    {
+                        "user": client.user,
+                        "ip": client.sck.remote_address,
+                        "role": client.role.name
+                    }
+                    for client in self.clients
+                ]
             ))
 
 
@@ -339,6 +353,17 @@ async def handle_point_camera(self: RoverBaseStation, _client: Client, msg: Poin
 async def handle_arduino_debug(self: RoverBaseStation, _client: Client, msg: ArduinoDebugMessage):
     # Forward to rover
     await self.broadcast(msg, Role.ROVER)
+
+
+@message_handler(NmeaMessage, Role.ROVER)
+async def handle_nmea(self: RoverBaseStation, _client: Client, msg: NmeaMessage):
+    self.db.execute(
+        """
+            insert into nmea (time, sentence)
+            values (?, ?)
+        """,
+        (msg.time, msg.sentence)
+    )
 
 
 async def default_handler(self: RoverBaseStation, client: Client, msg: Message):

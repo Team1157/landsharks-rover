@@ -11,6 +11,7 @@ import websockets
 import psutil
 import serial
 import serial_asyncio
+import pynmea2
 from common import *
 
 
@@ -72,6 +73,9 @@ class Sandshark:
         # Start serial listener
         asyncio.create_task(self.serial_main())
 
+        # Start GPS listener
+        asyncio.create_task(self.gps_main())
+
         # async for sck in websockets.connect("wss://rover.team1157.org:11571/rover", ping_interval=5, ping_timeout=10):
         async for self.sck in websockets.connect("ws://127.0.0.1:11571/rover", ping_interval=5, ping_timeout=10):
             # Authenticate
@@ -115,7 +119,7 @@ class Sandshark:
         while True:
             try:
                 self.serial_reader, self.serial_writer = await serial_asyncio.open_serial_connection(
-                    url="COM5",
+                    url="/dev/ttyS0",
                     baudrate=115200
                 )
                 self.serial_connected = True
@@ -139,6 +143,51 @@ class Sandshark:
                 self.serial_connected = False
                 print("Disconnected from arduino, reconnecting in 5 seconds...")
                 await self.log(f"Disconnected from arduino with error: {traceback.format_exc()}", "error")
+                await asyncio.sleep(5)
+                continue
+
+    async def gps_main(self):
+        while True:
+            try:
+                gps_reader, _ = await serial_asyncio.open_serial_connection(
+                    url="/dev/ttyUSB1",
+                    baudrate=115200
+                )
+                while True:
+                    try:
+                        sentence_raw = (await gps_reader.readline()).decode()
+                        ts = time.time_ns()  # system timestamp
+                        if self.sck and self.sck.open:
+                            # Send raw sentence on an NMEA packet
+                            await self.sck.send_msg(NmeaMessage(time=ts, sentence=sentence_raw))
+                            # Decode sentence and log as sensor
+                            # Only log the values in GGA sentences to avoid duplication by RMC sentences
+                            sentence = pynmea2.parse(sentence_raw)
+                            if sentence.sentence_type == "GGA" and sentence.is_valid:  # don't report before fix
+                                await self.sck.send_msg(SensorDataMessage(
+                                    time=ts,
+                                    sensor="gps",
+                                    measurements={
+                                        "time": sentence.timestamp.isoformat(),
+                                        "lat": sentence.latitude,
+                                        "lon": sentence.longitude,
+                                        "alt": sentence.altitude,
+                                        "hdop": sentence.horizontal_dil,
+                                        "num_sats": int(sentence.num_sats)
+                                    }
+                                ))
+
+                    except Exception as e:
+                        # Re-raise SerialException
+                        if isinstance(e, serial.SerialException):
+                            raise e
+
+                        print(f"Uncaught exception in gps_main(): {e!r}: {traceback.format_exc()}")
+                        await self.log(f"Rover error in gps_main(): {e!r}: {traceback.format_exc()}", "error")
+
+            except serial.SerialException:
+                print("Disconnected from GPS, reconnecting in 5 seconds...")
+                await self.log(f"Disconnected from GPS with error: {traceback.format_exc()}", "warning")
                 await asyncio.sleep(5)
                 continue
 
