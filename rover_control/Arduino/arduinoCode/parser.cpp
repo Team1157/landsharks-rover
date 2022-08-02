@@ -13,12 +13,20 @@ char command_buffer[256] = {'\0'};
 size_t command_buf_index = 0; // bounded 0 to 254
 bool command_buf_overrun = false;
 
+uint32_t lastMessageMillis = 0;
+
+uint32_t getLastMessageMillis() {
+  return lastMessageMillis();
+}
+
 void execute_command();
 
 void read_serial_task() {
   int r;
   while ((r = Serial.read()) != -1) {
     if (r == '\n') {
+      lastMessageMillis = millis();
+      
       command_buffer[command_buf_index] = '\0';
       if (command_buf_overrun) {
         command_buf_overrun = false;
@@ -43,6 +51,9 @@ void read_serial_task() {
 void execute_command() {
   // Read the command specifier
   switch (command_buffer[0]) {
+    case 'h': { // Heartbeat
+      Serial.println("hb");
+    }
     case 'e': { // Echo
       // Return rest of buffer raw
       Serial.print("echo ");
@@ -56,9 +67,9 @@ void execute_command() {
       break;
     }
     case 'd': { // Move distance
-      int16_t dist;
-      uint16_t spd, angle;
-      CHECK_ARGS(sscanf(command_buffer+1, "%d %u %u", &dist, &spd, &angle), 3);
+      int16_t dist, angle;
+      uint16_t spd;
+      CHECK_ARGS(sscanf(command_buffer+1, "%d %u %d", &dist, &spd, &angle), 3);
       moveDistanceCommand(dist, spd, angle);
       break;
     }

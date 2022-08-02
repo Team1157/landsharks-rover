@@ -27,6 +27,8 @@ class Sandshark:
         self.camera_yaw = 0
         self.camera_pitch = 0
 
+        self.lastHeartbeat = time.time_ns()
+
         self.options = {  # TODO
             "navicam.enabled": False,
             "prettycam.enabled": False
@@ -146,6 +148,14 @@ class Sandshark:
                 await self.log(f"Disconnected from arduino with error: {traceback.format_exc()}", "error")
                 await asyncio.sleep(5)
                 continue
+
+    async def serial_heartbeat(self):
+        if self.serial_connected:
+            self.serial_writer.write(b"h\n")
+            await self.serial_writer.drain()
+            if time.time_ns() - self.lastHeartbeat > 1e9:
+                await self.log("Arduino is not replying to heartbeats", "warning")
+        await asyncio.sleep(0.5)
 
     async def gps_main(self):
         # Enable GPS - blocking, since we're still just initializing
@@ -313,6 +323,11 @@ def arduino_handler(message_type: str):
     return decorate
 
 
+@arduino_handler("hb")
+async def arduino_heartbeat(self: Sandshark, _msg: str):
+    self.lastHeartbeat = time.time_ns()
+
+
 @arduino_handler("echo")
 async def arduino_echo(self: Sandshark, msg: str):
     # Log echo
@@ -365,18 +380,16 @@ async def arduino_data(self: Sandshark, msg: str):
 
             case "imu":
                 meas = {
-                    "x_accel": float_or_none(raw_meas[0]),
-                    "y_accel": float_or_none(raw_meas[1]),
-                    "z_accel": float_or_none(raw_meas[2]),
-                    "roll": float_or_none(raw_meas[3]),
-                    "pitch": float_or_none(raw_meas[4]),
-                    "yaw": float_or_none(raw_meas[5]),
-                    "temp": int_or_none(raw_meas[6])
+                    "roll": float_or_none(raw_meas[0]),
+                    "pitch": float_or_none(raw_meas[1]),
+                    "yaw": float_or_none(raw_meas[2]),
+                    "temp": int_or_none(raw_meas[3])
                 }
 
             case "load_current":
+                int_current = int_or_none(raw_meas[0])
                 meas = {
-                    "current": int_or_none(raw_meas[0])
+                    "current":  None if int_current is None else int_current / 10  # deciamps to amps
                 }
 
             case "panel_power":

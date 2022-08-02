@@ -57,21 +57,15 @@ void BNO055::init() {
 
 void BNO055::poll() {
   bno.getEvent(&event, Adafruit_BNO055::VECTOR_EULER);
-//  Serial.print("log debug x: ");
-//  Serial.println(event.orientation.x);
-//  Serial.print("y: ");
-//  Serial.println(event.orientation.y);
-//  Serial.print("z: ");
-//  Serial.println(event.orientation.z);
-  bno.getEvent(&event, Adafruit_BNO055::VECTOR_LINEARACCEL);
+  lastData.roll = event.orientation.z > 0 ? event.orientation.z - 180 : event.orientation.z + 180;
+  lastData.pitch = -event.orientation.y;
+  lastData.yaw = event.orientation.x;
+  
   lastData.temp = bno.getTemp();
 }
 
 void BNO055::sendData() {
   Sensor::sendData();
-  SP(lastData.x_accel, 2);
-  SP(lastData.y_accel, 2);
-  SP(lastData.z_accel, 2);
   SP(lastData.roll, 2);
   SP(lastData.pitch, 2);
   SP(lastData.yaw, 2);
@@ -98,8 +92,8 @@ void INA260::init() {
 }
 
 void INA260::poll() {
-  voltage = ina.readBusVoltage();
-  current = ina.readCurrent();
+  voltage = ina.readBusVoltage() / 1000;
+  current = ina.readCurrent() / 1000;
 }
 
 void INA260::sendData() {

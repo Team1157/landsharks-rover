@@ -40,9 +40,6 @@ class BME280: public Sensor {
 class BNO055: public Sensor {
   public:
     struct BNO055Data {
-      float x_accel;
-      float y_accel;
-      float z_accel;
       float roll;
       float pitch;
       float yaw;

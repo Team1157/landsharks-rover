@@ -4,3 +4,4 @@ pyserial~=3.5
 psutil~=5.9.1
 serde~=0.8.1
 pynmea2~=1.18.0
+pyserial~=3.5
