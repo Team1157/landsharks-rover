@@ -179,6 +179,14 @@ class ArduinoDebugMessage(Message):
     message: serde.fields.Str()
 
 
+class NmeaMessage(Message):
+    """Contains a raw NMEA sentence emitted by the GPS"""
+    tag_name = "nmea"
+
+    time: serde.fields.Int()
+    sentence: serde.fields.Str()
+
+
 # Extension method
 
 def send_msg(self: websockets.WebSocketCommonProtocol, msg: Message):
@@ -208,5 +216,6 @@ __all__ = [
     "QueryBaseMessage",
     "QueryBaseResponseMessage",
     "PointCameraMessage",
-    "ArduinoDebugMessage"
+    "ArduinoDebugMessage",
+    "NmeaMessage"
 ]

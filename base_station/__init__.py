@@ -4,24 +4,20 @@ import os
 import pathlib
 import sqlite3
 import traceback
+import ssl
 
 import serde
-import toml
 import websockets
 import typing as t
 import logging
 import logging.handlers
 from common import *
-from base_station.config import Config
 from base_station.util import LOG_LEVELS, Client
 
 
 class RoverBaseStation:
     def __init__(self):
-        module_path = pathlib.Path(os.path.dirname(__file__))
-
-        with open(module_path / "config.toml") as f:
-            self.config = Config(toml.load(f))
+        self.module_path = pathlib.Path(os.path.dirname(__file__))
 
         # Clients collection
         self.clients: t.Set[Client] = set()
@@ -39,7 +35,7 @@ class RoverBaseStation:
         stream_handl.setLevel(logging.INFO)
         # File handler
         file_handl = logging.handlers.TimedRotatingFileHandler(
-            module_path / "logs" / "base_station.log",
+            self.module_path / "logs" / "base_station.log",
             when="midnight",
             interval=1
         )
@@ -63,28 +59,50 @@ class RoverBaseStation:
         self.logger = logging.getLogger("sandshark")
 
         # Connect to sensor data database and initialize
-        self.db = sqlite3.connect(module_path / "sensor_data" / "data.db")
-        cur = self.db.cursor()
-        cur.execute("""
+        self.db = sqlite3.connect(self.module_path / "sensor_data" / "data.db")
+        self.db.executescript("""
+            begin;
             create table if not exists sensors (
                 id integer primary key autoincrement,
-                time text,
+                time integer,
                 sensor text,
                 measurement text,
                 value float
-            )
+            );
+            
+            create table if not exists nmea (
+                id integer primary key autoincrement,
+                time integer,
+                sentence text
+            );
+            commit;
         """)
-        self.db.commit()
 
         # Load user authentication "database"
         try:
-            with open(module_path / "rover_users.json", "r") as f:
+            with open(self.module_path / "rover_users.json", "r") as f:
                 self.userbase = json.load(f)
         except FileNotFoundError:
             self.logger.critical("Unable to open rover_users.json: file does not exist.")
             raise SystemExit(1)
 
         self.logger.info("Rover base station starting!")
+
+    async def main(self):
+        if "SANDSHARK_NOWSS" in os.environ:
+            ssl_ctx = None
+        else:
+            ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ssl_ctx.load_cert_chain(
+                self.module_path / "certs" / "fullchain.pem",
+                self.module_path / "certs" / "privkey.pem"
+            )
+        async with websockets.serve(
+            self.serve,
+            port=11571,
+            ssl=ssl_ctx
+        ):
+            await asyncio.Future()  # run forever
 
     async def broadcast(self, message: Message, role: t.Optional[Role] = None):
         """
@@ -229,10 +247,6 @@ class RoverBaseStation:
         finally:
             await self.unregister_client(client)
 
-    async def main(self, *args, **kwargs):
-        async with websockets.serve(self.serve, *args, **kwargs):
-            await asyncio.Future()  # run forever
-
 
 # #  MESSAGE HANDLERS  # #
 message_handlers = {}
@@ -304,12 +318,13 @@ async def handle_option_response(self: RoverBaseStation, _client: Client, msg: O
 async def handle_sensor_data(self: RoverBaseStation, _client: Client, msg: SensorDataMessage):
     # Forward to drivers
     await self.broadcast(msg, Role.DRIVER)
-    cur = self.db.cursor()
-    for measurement, value in msg.measurements.items():
-        cur.execute("""
+    self.db.executemany(
+        """
             insert into sensors (time, sensor, measurement, value)
             values (?, ?, ?, ?)
-        """, (msg.time, msg.sensor, measurement, value))
+        """,
+        ((msg.time, msg.sensor, measurement, value) for measurement, value in msg.measurements.items())
+    )
     self.db.commit()
 
 
@@ -319,7 +334,14 @@ async def handle_query_base(self: RoverBaseStation, client: Client, msg: QueryBa
         case "clients":
             await client.sck.send_msg(QueryBaseResponseMessage(
                 query=msg.query,
-                value=[{"user": client.user, "ip": client.sck.remote_address, "role": client.role.name} for client in self.clients]
+                value=[
+                    {
+                        "user": client.user,
+                        "ip": client.sck.remote_address,
+                        "role": client.role.name
+                    }
+                    for client in self.clients
+                ]
             ))
 
 
@@ -339,6 +361,17 @@ async def handle_point_camera(self: RoverBaseStation, _client: Client, msg: Poin
 async def handle_arduino_debug(self: RoverBaseStation, _client: Client, msg: ArduinoDebugMessage):
     # Forward to rover
     await self.broadcast(msg, Role.ROVER)
+
+
+@message_handler(NmeaMessage, Role.ROVER)
+async def handle_nmea(self: RoverBaseStation, _client: Client, msg: NmeaMessage):
+    self.db.execute(
+        """
+            insert into nmea (time, sentence)
+            values (?, ?)
+        """,
+        (msg.time, msg.sentence)
+    )
 
 
 async def default_handler(self: RoverBaseStation, client: Client, msg: Message):
