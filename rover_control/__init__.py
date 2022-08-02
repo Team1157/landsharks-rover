@@ -71,6 +71,9 @@ class Sandshark:
         # Start GPS listener
         asyncio.create_task(self.gps_main())
 
+        # Start serial heartbeat
+        asyncio.create_task(self.serial_heartbeat())
+
         # async for sck in websockets.connect("wss://rover.team1157.org:11571/rover", ping_interval=5, ping_timeout=10):
         async for self.sck in websockets.connect("ws://127.0.0.1:11571/rover", ping_interval=5, ping_timeout=10):
             # Authenticate
@@ -150,12 +153,13 @@ class Sandshark:
                 continue
 
     async def serial_heartbeat(self):
-        if self.serial_connected:
-            self.serial_writer.write(b"h\n")
-            await self.serial_writer.drain()
-            if time.time_ns() - self.lastHeartbeat > 1e9:
-                await self.log("Arduino is not replying to heartbeats", "warning")
-        await asyncio.sleep(0.5)
+        while True:
+            if self.serial_connected:
+                self.serial_writer.write(b"h\n")
+                await self.serial_writer.drain()
+                if time.time_ns() - self.lastHeartbeat > 1e9:
+                    await self.log("Arduino is not replying to heartbeats", "warning")
+            await asyncio.sleep(0.5)
 
     async def gps_main(self):
         # Enable GPS - blocking, since we're still just initializing
