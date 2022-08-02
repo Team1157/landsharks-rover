@@ -203,10 +203,10 @@ class RoverBaseStation:
         """
         if client in self.clients:
             self.clients.remove(client)
-            await self.log(f"User {client.user} ({client.role}) disconnected with code {client.sck.close_code}",
+            await self.log(f"User {client.user} ({client.role.name}) disconnected with code {client.sck.close_code}",
                            "info" if client.sck.close_code <= 1001 else "warning")
         else:
-            await self.log(f"User {client.user} ({client.role}) disconnected with code {client.sck.close_code} "
+            await self.log(f"User {client.user} ({client.role.name}) disconnected with code {client.sck.close_code} "
                            f"but was never registered", "warning")
 
     async def serve(self, sck: websockets.WebSocketServerProtocol, path: str):

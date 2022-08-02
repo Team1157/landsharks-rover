@@ -16,12 +16,6 @@ from common import *
 
 
 class Sandshark:
-    commands: t.Dict[str, t.Callable[..., t.Coroutine]] = {}
-
-    @classmethod
-    def register_command(cls, fn: t.Callable[..., t.Coroutine]):
-        cls.commands[fn.__name__] = fn
-
     def __init__(self):
         self.sck: t.Optional[websockets.WebSocketClientProtocol] = None
         self.current_command: t.Optional[Command] = None
@@ -33,10 +27,9 @@ class Sandshark:
         self.camera_yaw = 0
         self.camera_pitch = 0
 
-        self.options = {
+        self.options = {  # TODO
             "navicam.enabled": False,
-            "prettycam.enabled": False,
-
+            "prettycam.enabled": False
         }
 
     async def log(self, msg: str, level: str = "info"):
@@ -112,6 +105,14 @@ class Sandshark:
 
             except websockets.ConnectionClosed:
                 print("Disconnected from base station, reconnecting in 5 seconds...")
+                # Cancel command if running
+                if self.current_command is not None:
+                    if self.serial_connected:
+                        print("Cancelling command")
+                        self.serial_writer.write(b"x\n")
+                        await self.serial_writer.drain()
+                    else:
+                        print("Unable to cancel command, serial disconnected")
                 await asyncio.sleep(5)
                 continue
 
@@ -147,6 +148,13 @@ class Sandshark:
                 continue
 
     async def gps_main(self):
+        # Enable GPS - blocking, since we're still just initializing
+        try:
+            with serial.Serial("/dev/ttyUSB2", baudrate=115200, rtscts=True, dsrdtr=True) as ser:
+                ser.write(b"AT+QGPS=1\r\n")
+        except serial.SerialException:
+            print("Unable to turn on GPS!")
+
         while True:
             try:
                 gps_reader, _ = await serial_asyncio.open_serial_connection(
@@ -156,6 +164,10 @@ class Sandshark:
                 while True:
                     try:
                         sentence_raw = (await gps_reader.readline()).decode()
+                        # Ignore whitespace-only lines
+                        if not sentence_raw.strip():
+                            continue
+
                         ts = time.time_ns()  # system timestamp
                         if self.sck and self.sck.open:
                             # Send raw sentence on an NMEA packet
