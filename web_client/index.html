@@ -28,7 +28,15 @@
   <div id="sidebarleft">
     <div id="status">
       <h1>Status</h1>
-      <div id="mapid"></div>
+      <div id="mapcontainer">
+        <div id="mapcolumnleft">
+          <label><input id="followrovercheckbox" type="checkbox" checked>Follow rover</label>
+        </div>
+        <div id="mapcolumnright">
+          <div id="mapid"></div>
+          <p id="mapcaption">No data</p>
+        </div>
+      </div>
       <span id="attitude"></span>
     </div>
   </div>
@@ -36,13 +44,13 @@
     <h1>Commands</h1>
     <div class=slidercontainer>
       <p>movement distance (m)</p>
-      <input type="range" min="-2" max="10" value="1" step=".5" class="slider" id="moveAmountSlider">
-      <input type="number" min="-2" max="10" step="any" class="numeric" id="moveAmountNumber">
+      <input type="range" min="0" max="10" value="1" step=".5" class="slider" id="moveAmountSlider">
+      <input type="number" min="0" max="10" step="any" class="numeric" id="moveAmountNumber">
     </div>
     <div class=slidercontainer>
       <p>movement speed (m/s)</p>
-      <input type="range" min="0" max="1" value=".2" step=".05" class="slider" id="moveSpeedSlider">
-      <input type="number" min="0" max="1.2" step="any" class="numeric" id="moveSpeedNumber">
+      <input type="range" min="0" max="1.5" value=".5" step=".05" class="slider" id="moveSpeedSlider">
+      <input type="number" min="0" max="1.5" step="any" class="numeric" id="moveSpeedNumber">
     </div>
     <div class=slidercontainer>
       <p>rotation angle (°)</p>
@@ -52,19 +60,19 @@
     <div class="dpad">
       <table>
         <tr>
-          <td><img class="tul" src="images/arrow_turn.svg"></td>
-          <td><img class="tum" src="images/arrow_straight.svg"></td>
-          <td><img class="tur" src="images/arrow_turn.svg"></td>
+          <td><img id="tul" src="images/arrow_turn.svg"></td>
+          <td><img id="tum" src="images/arrow_straight.svg"></td>
+          <td><img id="tur" src="images/arrow_turn.svg"></td>
         </tr>
         <tr>
-          <td><img class="tml" src="images/arrow_straight.svg"></td>
-          <td><img src="images/stop.png" class="estop" onclick="eStop()"></td>
-          <td><img class="tmr" src="images/arrow_straight.svg"></td>
+          <td><img id="tml" src="images/arrow_straight.svg"></td>
+          <td><img id="tmm" src="images/stop.png"></td>
+          <td><img id="tmr" src="images/arrow_straight.svg"></td>
         </tr>
         <tr>
-          <td><img class="tbl" src="images/arrow_turn.svg"></td>
-          <td><img class="tbm" src="images/arrow_straight.svg"></td>
-          <td><img class="tbr" src="images/arrow_turn.svg"></td>
+          <td><img id="tbl" src="images/arrow_turn.svg"></td>
+          <td><img id="tbm" src="images/arrow_straight.svg"></td>
+          <td><img id="tbr" src="images/arrow_turn.svg"></td>
         </tr>
       </table>
     </div>

@@ -21,6 +21,11 @@ p {
   font-size: 14px;
 }
 
+label {
+  color: #eeeeee;
+  margin: 10px;
+}
+
 h1 {
   margin:15px;
   padding:0;
@@ -67,16 +72,18 @@ h1 {
 
 #consoleinput {
   margin-left: 15px;
-  position: fixed;
+  position: absolute;
   bottom: 0;
+  width: calc(100% - 15px);
 }
 
 #consoleinput > input {
-  width: 100%;
+  width: calc(100% - 7px);
   color: white;
   background-color: black;
   border: none;
   outline: none;
+  margin-bottom: 3px;
   margin-left: 7px;
   font-family: monospace;
 }
@@ -86,7 +93,7 @@ h1 {
   color: white;
   margin-left: 5px;
   width: 10px;
-  position: fixed;
+  position: absolute;
   bottom: 0;
 }
 
@@ -135,12 +142,26 @@ td:hover { background-color:#E2A490; }
 
 .stream { width: 100%; }
 
-#mapid {
+#mapcolumnleft {
+  float: left;
+  width: 40%;
+}
+
+#mapcolumnright {
+  float: left;
   width: 60%;
+}
+
+#mapid {
+  width: 100%;
   height: 0;
-  padding-bottom: 60%;
+  padding-bottom: 100%;
   float: right;
   margin: 10px
+}
+
+#mapcaption {
+  text-align: center;
 }
 
 #attitude {
@@ -165,19 +186,19 @@ td:hover { background-color:#E2A490; }
   user-select: none;
 }
 
-.tul {}
-.tum { transform: rotate(  0deg) translate(0,-25%); }
-.tur { transform: scaleX(-1); }
+#tul {}
+#tum { transform: rotate(  0deg) translate(0,-25%); }
+#tur { transform: scaleX(-1); }
 
-.tml { transform: rotate(-90deg) translate(0,-25%); }
+#tml { transform: rotate(-90deg) translate(0,-25%); }
 
-.tmr { transform: rotate( 90deg) translate(0,-25%); }
+#tmr { transform: rotate( 90deg) translate(0,-25%); }
 
-.tbl { transform: scaleY(-1); }
-.tbm { transform: rotate( 180deg) translate(0,-25%); }
-.tbr { transform: scaleX(-1) scaleY(-1); }
+#tbl { transform: scaleY(-1); }
+#tbm { transform: rotate( 180deg) translate(0,-25%); }
+#tbr { transform: scaleX(-1) scaleY(-1); }
 
-.estop {
+#tmm {
   display: block;
   width: 75%;
   margin: auto;

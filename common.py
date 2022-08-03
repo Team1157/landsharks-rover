@@ -56,7 +56,7 @@ class MoveDistanceCommand(Command):
     speed: Number()
     angle: Number()
 
-    def to_arduino(self): return f"d{self.distance} {self.speed} {self.angle}".encode()  # TODO
+    def to_arduino(self): return f"d{round(self.distance * 1000)} {round(self.speed * 1000)} {round(self.angle)}".encode()
 
 
 class MoveContinuousCommand(Command):

@@ -242,6 +242,8 @@ async def handle_command(self: Sandshark, msg: CommandMessage):
         if self.serial_connected:
             self.serial_writer.write(self.current_command.to_arduino())
             await self.serial_writer.drain()
+            if self.sck and self.sck.open:
+                await self.sck.send_msg(CommandStatusMessage(command=self.current_command))
         else:
             await self.log("Could not set command because Arduino is not connected", "error")
 
@@ -302,20 +304,6 @@ async def handle_arduino_debug(self: Sandshark, msg: ArduinoDebugMessage):
 async def default_handler(self: Sandshark, msg: Message):
     if self.sck and self.sck.open:
         await self.sck.send_msg(LogMessage(message=f"Received unexpected {msg.tag_name} message", level="warning"))
-
-
-command_handlers = {}
-
-
-def command_handler(command_type: t.Type):
-    def decorate(fn: t.Callable[[Sandshark, Command], t.Coroutine]):
-        command_handlers[command_type] = fn
-    return decorate
-
-
-@command_handler(MoveDistanceCommand)
-async def move_distance_command(_self: Sandshark, _cmd: MoveDistanceCommand):
-    pass
 
 
 arduino_handlers = {}
