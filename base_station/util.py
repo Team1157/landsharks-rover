@@ -1,5 +1,4 @@
 import logging
-import typing as t
 import websockets
 from common import Role
 
