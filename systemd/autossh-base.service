@@ -1,0 +1,16 @@
+[Unit]
+Description=Maintain a reverse SSH tunnel to the base station
+After=network.target qmi_reconnect.service
+StartLimitIntervalSec=10
+StartLimitBurst=100
+StartLimitAction=reboot
+
+[Service]
+User=sandshark
+Restart=always
+RestartSec=5
+Environment="AUTOSSH_GATETIME=0"
+ExecStart=/usr/bin/autossh -M 11579 -R 11578:localhost:22 -N -v sandshark@rover.team1157.org
+
+[Install]
+WantedBy=multi-user.target
