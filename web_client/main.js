@@ -2,6 +2,7 @@ import * as config from "./modules/config.js";
 import * as ui from "./modules/ui.js"
 import {initLogger, log} from "./modules/logger.js";
 import {USE_WSS} from "./modules/config.js";
+import {updateOrientation, updatePosition} from "./modules/ui.js";
 
 let socket;
 let authenticated = false;
@@ -14,9 +15,19 @@ async function onConnect(ev) {
     sendObject({"type": "auth", "token": token})
 }
 
+function getOrError(property) {
+    let res = this[property]
+    if (res === undefined) {
+        log("Failed to read message property: " + property, "error");
+        throw "Could not get message property: " + property;
+    } else {
+        return res;
+    }
+}
+
 async function onMessage(ev) {
     let raw_msg = ev.data;
-    log(raw_msg, "debug");
+    log("Received: " + raw_msg, "debug");
 
     let msg
     try {
@@ -26,14 +37,7 @@ async function onMessage(ev) {
         return;
     }
 
-    msg.getOrError = function(property) {
-        let res = this[property]
-        if (res === undefined) {
-            throw "Could not get message property: " + property;
-        } else {
-            return res;
-        }
-    }
+    msg.getOrError = getOrError;
 
     let msg_type = msg.getOrError("type");
 
@@ -80,7 +84,7 @@ async function onDisconnect(ev) {
 }
 
 async function onError(ev) {
-    log('Socket encountered error: ' + ev.message, "error");
+    log("Socket encountered an error", "error");
     socket.close();
 }
 
@@ -95,8 +99,12 @@ function connect() {
 function onPageLoad() {
     initLogger([ui.writeToConsole], [broadcastLog])
     ui.initUi();
+
     ui.registerConsoleCallback(sendMessage);
-    connect()
+    ui.registerDriveCallback(driveCommandCallback);
+    ui.registerEStopCallback(eStopCallback);
+
+    connect();
 }
 
 function sendMessage(msg) {
@@ -104,6 +112,8 @@ function sendMessage(msg) {
         log("Failed to send message because socket is closed", "error");
         return;
     }
+
+    log("Sending: " + msg, "debug");
 
     socket.send(msg);
 }
@@ -119,6 +129,24 @@ function sendObject(obj) {
 
 function broadcastLog(message, level) {
     sendObject({"type": "log", "message": message, "level": level});
+}
+
+function driveCommandCallback(dist, spd, angle) {
+    sendObject({
+        "type": "command",
+        "command": {
+            "type": "move_distance",
+            "distance": Number(dist),
+            "speed": Number(spd),
+            "angle": Number(angle)
+        }
+    });
+}
+
+function eStopCallback() {
+    sendObject({
+        "type": "e_stop"
+    });
 }
 
 // Message Handlers
@@ -137,23 +165,35 @@ function handleLog(message, level) {
 }
 
 function handleCommandEnded(command, completed) {
-
+    if (completed) {
+        log("Command completed", "info");
+    } else {
+        log("Command interrupted", "info");
+    }
 }
 
 function handleCommandStatus(command) {
-
+    log("Command running", "info");
 }
 
 function handleOptionResponse(values) {
-
 }
 
-function handleSensorData(time, sensor, measurements) {
+function handleSensorData(time, sensor, meas) {
+    meas.getOrError = getOrError;
 
+    switch (sensor) {
+        case "gps":
+            updatePosition(meas.getOrError(lat), meas.getOrError(meas.lon));
+            break;
+
+        case "imu":
+            updateOrientation(meas.getOrError("roll"), meas.getOrError("pitch"), meas.getOrError("yaw"));
+            break;
+    }
 }
 
 function handleQueryBaseResponse(query, value) {
-
 }
 
 window.addEventListener("DOMContentLoaded", onPageLoad, false);

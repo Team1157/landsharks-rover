@@ -306,20 +306,6 @@ async def default_handler(self: Sandshark, msg: Message):
         await self.sck.send_msg(LogMessage(message=f"Received unexpected {msg.tag_name} message", level="warning"))
 
 
-command_handlers = {}
-
-
-def command_handler(command_type: t.Type):
-    def decorate(fn: t.Callable[[Sandshark, Command], t.Coroutine]):
-        command_handlers[command_type] = fn
-    return decorate
-
-
-@command_handler(MoveDistanceCommand)
-async def move_distance_command(_self: Sandshark, _cmd: MoveDistanceCommand):
-    pass
-
-
 arduino_handlers = {}
 
 

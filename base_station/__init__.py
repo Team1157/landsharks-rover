@@ -204,7 +204,7 @@ class RoverBaseStation:
         if client in self.clients:
             self.clients.remove(client)
             await self.log(f"User {client.user} ({client.role.name}) disconnected with code {client.sck.close_code}",
-                           "info" if client.sck.close_code <= 1001 else "warning")
+                           "info" if client.sck.close_code is not None and client.sck.close_code <= 1001 else "warning")
         else:
             await self.log(f"User {client.user} ({client.role.name}) disconnected with code {client.sck.close_code} "
                            f"but was never registered", "warning")
@@ -230,8 +230,7 @@ class RoverBaseStation:
                     await message_handlers.get(msg.__class__, default_handler)(self, client, msg)
 
                 except (serde.ValidationError, json.JSONDecodeError):
-                    await self.log(f"Received invalid message from {client.ip}", "error")
-                    # await sck.send_msg(LogMessage(message="Invalid message", level="error"))
+                    await self.log(f"Received invalid message from {client.user} @ {client.ip}", "error")
                     continue
 
                 # Catch all exceptions within loop so connection doesn't get closed
@@ -241,7 +240,8 @@ class RoverBaseStation:
                     await self.log(f"Base station error {e!r}: {traceback.format_exc()}", "error")
 
         except websockets.ConnectionClosed:
-            pass
+            await self.broadcast(EStopMessage(), Role.ROVER)
+            await self.log(f"Client {client.user} ({client.role.name}) disconnected, activating e-stop!", "warning")
 
         # Unregister clients when the connection loop ends even if it errors
         finally:
