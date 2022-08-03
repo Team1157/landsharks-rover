@@ -3,6 +3,7 @@ Common components used in both rover and base station
 """
 from enum import Enum
 import typing as t
+import numbers
 
 # noinspection PyUnresolvedReferences
 import serde.tags
@@ -31,6 +32,11 @@ class Tag(serde.tags.Internal):
         return getattr(variant, "tag_name", super().lookup_tag(variant))
 
 
+# noinspection PyPep8Naming
+def Number():
+    return serde.fields.Instance(numbers.Number)
+
+
 # COMMANDS #
 
 
@@ -46,9 +52,9 @@ class MoveDistanceCommand(Command):
     """Moves a specified distance at the specified speed while turning the specified angle over that distance"""
     tag_name = "move_distance"
 
-    distance: serde.fields.Float()
-    speed: serde.fields.Float()
-    angle: serde.fields.Float()
+    distance: Number()
+    speed: Number()
+    angle: Number()
 
     def to_arduino(self): return f"d{self.distance} {self.speed} {self.angle}".encode()  # TODO
 
@@ -57,8 +63,8 @@ class MoveContinuousCommand(Command):
     """Moves continuously at the specified speed while turning at specified angle"""
     tag_name = "move_continuous"
 
-    speed: serde.fields.Float()
-    angle: serde.fields.Float()
+    speed: Number()
+    angle: Number()
 
     def to_arduino(self): return f"c{self.speed} {self.angle}".encode()  # TODO
 
@@ -195,7 +201,6 @@ def send_msg(self: websockets.WebSocketCommonProtocol, msg: Message):
 
 websockets.WebSocketCommonProtocol.send_msg = send_msg
 del send_msg
-
 
 __all__ = [
     "Role",
