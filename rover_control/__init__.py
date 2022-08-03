@@ -177,9 +177,10 @@ class Sandshark:
 
         while True:
             try:
-                gps_reader, _gps_writer = await serial_asyncio.open_serial_connection(
+                gps_reader, gps_writer = await serial_asyncio.open_serial_connection(
                     url="/dev/ttyUSB1",
-                    baudrate=115200
+                    baudrate=115200,
+                    rtscts=True, dsrdtr=True
                 )
                 while True:
                     try:
