@@ -173,14 +173,17 @@ class Sandshark:
                 ser.write(b"AT+QGPS=1\r\n")
         except serial.SerialException:
             print("Unable to turn on GPS!")
+        print("Turned on GPS")
 
         while True:
+            print("opening GPS")
             try:
                 gps_reader, _ = await serial_asyncio.open_serial_connection(
                     url="/dev/ttyUSB1",
                     baudrate=115200
                 )
                 while True:
+                    print("getting GPS sentence")
                     try:
                         sentence_raw = (await gps_reader.readline()).decode()
                         # Ignore whitespace-only lines
