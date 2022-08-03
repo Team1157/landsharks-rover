@@ -74,10 +74,13 @@ class Sandshark:
         # Start serial heartbeat
         asyncio.create_task(self.serial_heartbeat())
 
-        # async for sck in websockets.connect("wss://rover.team1157.org:11571/rover", ping_interval=5, ping_timeout=10):
-        async for self.sck in websockets.connect("ws://127.0.0.1:11571/rover", ping_interval=5, ping_timeout=10):
+        with open("secrets.json") as secrets_file:
+            token = json.load(secrets_file)["token"]
+
+        async for self.sck in websockets.connect("wss://rover.team1157.org:11571/rover", ping_interval=5, ping_timeout=10):
+        # async for self.sck in websockets.connect("ws://127.0.0.1:11571/rover", ping_interval=5, ping_timeout=10):
             # Authenticate
-            await self.sck.send_msg(AuthMessage(token="DUMMY_TOKEN"))
+            await self.sck.send_msg(AuthMessage(token=token))
             try:
                 auth_response = AuthResponseMessage.from_json(await self.sck.recv())
                 self.user = auth_response.user

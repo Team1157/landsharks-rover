@@ -1,0 +1,15 @@
+[Unit]
+Description=Run the rover controller software
+After=network.target qmi_reconnect.service
+StartLimitIntervalSec=10
+StartLimitBurst=100
+
+[Service]
+User=sandshark
+Restart=always
+RestartSec=5
+WorkingDirectory=/home/sandshark/landsharks-rover
+ExecStart=/usr/bin/python -m rover_control
+
+[Install]
+WantedBy=multi-user.target
