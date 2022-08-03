@@ -362,36 +362,36 @@ async def arduino_data(self: Sandshark, msg: str):
         time_ = time.time_ns()
         m = re.match(r"^data (\w+) (.*)$", msg)
         raw_meas = m[2].strip().split(" ")
-        match m[1]:
-            case "internal_bme" | "external_bme":
-                meas = {
-                    "temp": float_or_none(raw_meas[0]),
-                    "humidity": float_or_none(raw_meas[1]),
-                    "pressure": int_or_none(raw_meas[2])
-                }
+        if m[1] in ("internal_bme", "external_bme"):
+            meas = {
+                "temp": float_or_none(raw_meas[0]),
+                "humidity": float_or_none(raw_meas[1]),
+                "pressure": int_or_none(raw_meas[2])
+            }
 
-            case "imu":
-                meas = {
-                    "roll": float_or_none(raw_meas[0]),
-                    "pitch": float_or_none(raw_meas[1]),
-                    "yaw": float_or_none(raw_meas[2]),
-                    "temp": int_or_none(raw_meas[3])
-                }
+        elif m[1] == "imu":
+            meas = {
+                "roll": float_or_none(raw_meas[0]),
+                "pitch": float_or_none(raw_meas[1]),
+                "yaw": float_or_none(raw_meas[2]),
+                "temp": int_or_none(raw_meas[3])
+            }
 
-            case "load_current":
-                int_current = int_or_none(raw_meas[0])
-                meas = {
-                    "current":  None if int_current is None else int_current / 10  # deciamps to amps
-                }
+        elif m[1] == "load_current":
+            int_current = int_or_none(raw_meas[0])
+            meas = {
+                "current":  None if int_current is None else int_current / 10  # deciamps to amps
+            }
 
-            case "panel_power":
-                meas = {
-                    "voltage": float_or_none(raw_meas[0]),
-                    "current": float_or_none(raw_meas[1])
-                }
-            case x:
-                await self.log(f"Received unknown sensor data from Arduino: {x}", "error")
-                return
+        elif m[1] == "panel_power":
+            meas = {
+                "voltage": float_or_none(raw_meas[0]),
+                "current": float_or_none(raw_meas[1])
+            }
+
+        else:
+            await self.log(f"Received unknown sensor data from Arduino: {m[1]}", "error")
+            return
 
         await self.sck.send_msg(SensorDataMessage(
             time=time_,
