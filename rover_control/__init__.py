@@ -176,14 +176,12 @@ class Sandshark:
         print("Turned on GPS")
 
         while True:
-            print("opening GPS")
             try:
-                gps_reader, _ = await serial_asyncio.open_serial_connection(
+                gps_reader, _gps_writer = await serial_asyncio.open_serial_connection(
                     url="/dev/ttyUSB1",
                     baudrate=115200
                 )
                 while True:
-                    print("getting GPS sentence")
                     try:
                         sentence_raw = (await gps_reader.readline()).decode()
                         # Ignore whitespace-only lines
