@@ -16,7 +16,7 @@ bool command_buf_overrun = false;
 uint32_t lastMessageMillis = 0;
 
 uint32_t getLastMessageMillis() {
-  return lastMessageMillis();
+  return lastMessageMillis;
 }
 
 void execute_command();

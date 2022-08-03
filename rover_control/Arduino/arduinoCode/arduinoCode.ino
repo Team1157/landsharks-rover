@@ -188,12 +188,14 @@ void driveTaskCallback() {
   } else {
     if (loadCurrent.current > 250) {
       driveTask.disable();
+      Serial.println("interrupted");
       Serial.println(F("log warning Cancelled command because load current exceeded 25A"));
       return;
     }
 
     if (millis() - getLastMessageMillis() > 1000) {
       driveTask.disable();
+      Serial.println("interrupted");
       Serial.println(F("log warning Cancelled command because there were no messages in the last 1000ms"));
     }
 
@@ -264,6 +266,8 @@ void moveDistanceCommand(int16_t dist, uint16_t spd, int16_t angle) {
 void eStopCommand() {
   driveTask.disable();
   stopMotors();
+
+  Serial.println("interrupted");
 }
 
 //============= MOVE CAMERA =============

@@ -225,6 +225,8 @@ async def handle_command(self: Sandshark, msg: CommandMessage):
         if self.serial_connected:
             self.serial_writer.write(self.current_command.to_arduino())
             await self.serial_writer.drain()
+            if self.sck and self.sck.open:
+                await self.sck.send_msg(CommandStatusMessage(command=self.current_command))
         else:
             await self.log("Could not set command because Arduino is not connected", "error")
 

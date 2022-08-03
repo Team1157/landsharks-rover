@@ -7,6 +7,8 @@ let attitude_indicator;
 let minimap;
 let mapMarker;
 
+let consoleCallback;
+
 function updateConsole() {
     let consoleDiv = document.getElementById("consolelines");
     while (consoleDiv.firstChild) {
@@ -18,36 +20,27 @@ function updateConsole() {
         newParagraph.append(newNode);
         consoleDiv.append(newParagraph)
     });
-    while (document.getElementById("consolelines").clientHeight + document.getElementById("consoleprompt").clientHeight > document.getElementById("console").clientHeight) {
-        consoleDiv.removeChild(consoleDiv.firstChild);
-        consoleLines.shift();
-    }
 }
 
-export function writeToConsole(message) {
-    consoleLines.push(message);
+export function registerConsoleCallback(callback) {
+    consoleCallback = callback;
+}
+
+export function writeToConsole(message, level) {
+    if (level === "debug") {
+        return;
+    }
+
+    if (level === undefined) {
+        consoleLines.push(message);
+    } else {
+        consoleLines.push("[" + level + "] " + message);
+    }
+
     updateConsole();
 }
 
-/**
- * Logs a message to the console and broadcasts it to the base station if desired
- *
- * @param {string} message The message to log
- * @param {string} level The log severity, one of [debug, info, warning, error, critical]
- * @param {boolean} broadcast
- */
-function log(message, level, broadcast) {
-    let formattedMessage = "[" + level.toUpperCase() + "] " + message;
-    console.log(formattedMessage);
-    if (level !== "debug") {
-        writeToConsole(message);
-    }
-    if (broadcast) {
-        //TODO
-    }
-}
-
-function initUi() {
+export function initUi() {
     let moveAmountSlider = document.getElementById("moveAmountSlider");
     let moveAmountNumber = document.getElementById("moveAmountNumber");
     moveAmountNumber.value = moveAmountSlider.value;
@@ -88,13 +81,11 @@ function initUi() {
     let consoleInput = document.getElementById("consoleinput").children.item(0);
     consoleInput.onkeypress = function(e) {
         let keyCode = e.which;
-        if (!socket) {
-            this.value = '';
-        }
-        else if (keyCode === 13) {
+
+        if (keyCode === 13) {
           // Enter pressed
           writeToConsole("> " + this.value);
-          socket.send(this.value);
+          consoleCallback(this.value);
           this.value = '';
         }
     };
@@ -108,6 +99,7 @@ function initUi() {
         center: roverPos,
         attributionControl: false
     });
+
     L.esri.basemapLayer('Imagery').addTo(minimap);
     L.control.scale().addTo(minimap);
     minimap.dragging.enable();
@@ -152,5 +144,3 @@ function updateOrientation(roll, pitch, yaw) {
     attitude_indicator.setPitch(pitch);
     mapMarker.setRotationAngle(yaw);
 }
-
-export { initUi }

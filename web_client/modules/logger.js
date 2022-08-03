@@ -12,16 +12,20 @@ export function initLogger(callbacksLocal, broadcastCallbacksLocal) {
 * @param {string} level The log severity, one of [debug, info, warning, error, critical]
 * @param {boolean} broadcast
 */
-export function log(message, level, broadcast) {
+export function log(message, level, broadcast = false) {
     let formattedMessage = "[" + level.toUpperCase() + "] " + message;
-    console.log(formattedMessage);
-    if (level !== "debug") {
-        for (const callback of this.callbacks) {
-            callback(message, level);
-        }
+    if (level === "error" || level === "critical") {
+        console.error(formattedMessage);
+    } else {
+        console.log(formattedMessage);
     }
+
+    for (const callback of callbacks) {
+        callback(message, level);
+    }
+
     if (broadcast) {
-        for (const callback of this.broadcastCallbacks) {
+        for (const callback of broadcastCallbacks) {
             callback(message, level);
         }
     }
