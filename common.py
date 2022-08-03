@@ -17,11 +17,10 @@ class Role(Enum):
 
     @classmethod
     def from_path(cls, path: str) -> t.Optional["Role"]:
-        match path:
-            case "/driver":
-                return Role.DRIVER
-            case "/rover":
-                return Role.ROVER
+        if path == "/driver":
+            return Role.DRIVER
+        elif path == "/rover":
+            return Role.ROVER
         return None
 
 
