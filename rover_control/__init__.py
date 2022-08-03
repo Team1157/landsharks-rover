@@ -56,7 +56,7 @@ class Sandshark:
                     "ctl_ram_used": this_proc.memory_full_info().uss
                 }
                 if hasattr(psutil, "sensors_temperatures"):
-                    meas["cpu_temp"] = psutil.sensors_temperatures()["coretemp"][0].current
+                    meas["cpu_temp"] = psutil.sensors_temperatures()["cpu_thermal"][0].current
                 await self.sck.send_msg(SensorDataMessage(time=time.time_ns(), sensor="pi", measurements=meas))
             await asyncio.sleep(5)
 
