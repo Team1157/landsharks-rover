@@ -1,4 +1,5 @@
 base_station/rover_users.json
+rover_control/secrets.json
 
 # Python stuff
 venv/

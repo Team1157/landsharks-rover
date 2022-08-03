@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import pathlib
 import time
 import typing as t
 import traceback
@@ -74,7 +75,8 @@ class Sandshark:
         # Start serial heartbeat
         asyncio.create_task(self.serial_heartbeat())
 
-        with open("secrets.json") as secrets_file:
+        module_path = pathlib.Path(os.path.dirname(__file__))
+        with open(module_path / "secrets.json") as secrets_file:
             token = json.load(secrets_file)["token"]
 
         async for self.sck in websockets.connect("wss://rover.team1157.org:11571/rover", ping_interval=5, ping_timeout=10):
