@@ -46,9 +46,7 @@ class RoverBaseStation:
         # Logger setup
         for logger, level in {
             "sandshark": logging.DEBUG,
-            "websockets": logging.INFO,
-            "websockets.protocol": logging.INFO,
-            "websockets.server": logging.INFO
+            "websockets": logging.INFO
         }.items():
             logger = logging.getLogger(logger)
             logger.setLevel(level)
