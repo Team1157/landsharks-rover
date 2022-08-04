@@ -6,6 +6,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-v4l = "0.13.0"
+rscam = "0.5.5"
 tungstenite = "0.17.3"
-#url = "2.2.2"

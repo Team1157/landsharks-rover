@@ -1,35 +1,37 @@
 use tungstenite::{connect, Message, Error as WsError};
-use v4l::prelude::*;
-use v4l::{
-    Device,
-    io::mmap::Stream
-};
-use v4l::buffer::Type;
-use v4l::io::traits::OutputStream;
+
 
 fn main() {
-    let mut cam = Device::new(0).expect("Failed to open camera");
+    let mut cam = rscam::new("/dev/video0").expect("failed to get camera device");
     // Using default format which should be mjpeg
 
-    let mut st = Stream::with_buffers(&mut cam, Type::VideoCapture, 4)
-        .expect("Failed to create buffers");
+    cam.start(&rscam::Config {
+        interval: (0, 30),
+        resolution: (1280, 720),
+        format: b"MJPG",
+        ..Default::default()
+    }).expect("failed to init camera");
+
+    let mut n = 0u32;
 
     'conn_loop: loop { // Endlessly try to connect
         let (mut sck, _response) = match connect("ws://localhost:11572") {
             Ok(x) => x,
-            Err(e) => {println!("Failed to connect: {e}"); continue;}
+            Err(e) => {println!("failed to connect: {e}"); continue;}
         };
-        println!("Connected");
+        println!("connected");
         loop { // Endlessly send frames
-            let (buf, meta) = st.next().expect("Error getting buffers");
-            match sck.write_message(Message::Binary(buf.into())) {
+            let frame = cam.capture().expect("failed to get frame");
+            print!("frame {n}\r");
+            n += 1;
+            match sck.write_message(Message::Binary(frame.into_vec())) {
                 Ok(_) => (),
                 Err(e) => match e {
                     WsError::AlreadyClosed | WsError::ConnectionClosed => {
-                        println!("Conn closed, reconnecting");
+                        println!("conn closed, reconnecting");
                         continue 'conn_loop;
                     },
-                    _ => println!("Error sending frame: {e}")
+                    _ => println!("error sending frame: {e}")
                 }
             }
         }
