@@ -138,7 +138,7 @@ class Sandshark:
                 while True:
                     try:
                         msg = (await self.serial_reader.readline()).decode()
-                        msg_type = re.match(r"^(\w+) ", msg)[1]
+                        msg_type = msg.split(" ")[0]
 
                         # Delegate to message handler
                         await arduino_handlers.get(msg_type, arduino_default)(self, msg)

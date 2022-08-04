@@ -48,17 +48,18 @@ h1 {
 
 #sidebarleft, #sidebarright {
  background-color: #393e46;
- width:25%;
  height:100vh;
  position: relative;
 }
 
 #sidebarleft {
  float:left;
+  width: 33%;
 }
 
 #sidebarright {
  float:right;
+  width: 300px;
 }
 
 #status {
@@ -123,7 +124,7 @@ tr, td {
   border-collapse: collapse;
 }
 
-td:hover { background-color:#E2A490; }
+.dpad > td:hover { background-color:#E2A490; }
 
 .center {
   position: relative;
@@ -140,16 +141,13 @@ td:hover { background-color:#E2A490; }
   padding-top: 45vh;
 }
 
-.stream { width: 100%; }
+#stream { width: 100%; }
 
-#mapcolumnleft {
-  float: left;
-  width: 40%;
-}
 
-#mapcolumnright {
+#instrumentscolumnright, #instrumentscolumnleft {
   float: left;
-  width: 60%;
+  width: 50%;
+  text-align: center;
 }
 
 #mapid {
@@ -165,10 +163,18 @@ td:hover { background-color:#E2A490; }
 }
 
 #attitude {
-  width: 60%;
+  width: 100%;
   height: 0;
   padding-bottom: 60%;
   float: right;
+}
+
+#sensortable p {
+  text-align: center;
+}
+
+.sensorreadout {
+  font-size: 24px;
 }
 
 .dpad {

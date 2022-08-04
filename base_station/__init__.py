@@ -169,7 +169,7 @@ class RoverBaseStation:
         # Error if invalid message
         except (serde.ValidationError, json.JSONDecodeError):
             await self.log(f"Received invalid auth message from {sck.remote_address[0]}", "error")
-            await sck.send_msg(AuthResponseMessage(success=False))
+            await sck.send_msg(AuthResponseMessage(success=False, user=None))
             await sck.send_msg(LogMessage(message="Invalid auth message", level="error"))
             await sck.close(1002, "Invalid auth message")
             return None
@@ -177,7 +177,7 @@ class RoverBaseStation:
         if not isinstance(auth_msg, AuthMessage):
             await self.log(f"Expected auth message but received `{auth_msg.tag_name}` from {sck.remote_address[0]}",
                            "error")
-            await sck.send_msg(AuthResponseMessage(success=False))
+            await sck.send_msg(AuthResponseMessage(success=False, user=None))
             await sck.send_msg(LogMessage(message="Expected an auth message", level="error"))
             await sck.close(1008, "Expected an auth message on first message")
             return None
@@ -186,7 +186,7 @@ class RoverBaseStation:
         user = self.userbase.get(auth_msg.token)
         if not user:
             await self.log(f"Client {sck.remote_address[0]} tried to authenticate with unknown token", "warning")
-            await sck.send_msg(AuthResponseMessage(success=False))
+            await sck.send_msg(AuthResponseMessage(success=False, user=None))
             await sck.send_msg(LogMessage(message="Authentication failed", level="error"))
             await sck.close(1008, "Authentication failed")
             return None

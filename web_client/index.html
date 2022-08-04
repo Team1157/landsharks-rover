@@ -28,16 +28,60 @@
   <div id="sidebarleft">
     <div id="status">
       <h1>Status</h1>
-      <div id="mapcontainer">
-        <div id="mapcolumnleft">
-          <label><input id="followrovercheckbox" type="checkbox" checked>Follow rover</label>
-        </div>
-        <div id="mapcolumnright">
+      <div id="instrumentscontainer">
+        <div id="instrumentscolumnleft">
           <div id="mapid"></div>
           <p id="mapcaption">No data</p>
+          <label><input id="followrovercheckbox" type="checkbox" checked>Follow rover</label>
+        </div>
+        <div id="instrumentscolumnright">
+          <span id="attitude"></span>
         </div>
       </div>
-      <span id="attitude"></span>
+      <div>
+        <table id="sensortable">
+          <tr>
+            <td>
+              <p>Ext. Temperature</p>
+              <p id="exttemp" class="sensorreadout">-</p>
+            </td>
+            <td>
+              <p>Ext. Humidity</p>
+              <p id="exthumidity" class="sensorreadout">-</p>
+            </td>
+            <td>
+              <p>Ext. Pressure</p>
+              <p id="extpressure" class="sensorreadout">-</p>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <p>Bat. Voltage</p>
+              <p id="batvoltage" class="sensorreadout">-</p>
+            </td>
+            <td><p>Panel Current</p>
+              <p id="panelcurrent" class="sensorreadout">-</p></td>
+            <td>
+              <p>Load Current</p>
+              <p id="loadcurrent" class="sensorreadout">-</p>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <p>Enclosure Temp.</p>
+              <p id="enclosuretemp" class="sensorreadout">-</p>
+            </td>
+            <td>
+              <p>Pi Temp.</p>
+              <p id="pitemp" class="sensorreadout">-</p>
+            </td>
+            <td>
+              <p>Imu Temp.</p>
+              <p id="imutemp" class="sensorreadout">-</p>
+            </td>
+          </tr>
+        </table>
+      </div>
     </div>
   </div>
   <div id="sidebarright">
@@ -80,7 +124,7 @@
   <div id="main">
     <div class="center">
       <div id="roverUI">
-        <img class="stream" src="images/camera%20placeholder.png">
+        <img id="stream" src="images/camera%20placeholder.png">
         <div id="console">
           <div id="consolelines">
           </div>

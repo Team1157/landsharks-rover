@@ -60,9 +60,8 @@ class BNO055: public Sensor {
 class AnalogCurrent: public Sensor {
   public:
     int current; // in deciamps
-    AnalogCurrent(char* sensorName);
 
-  private:
+    AnalogCurrent(char* sensorName);
     void poll();
     void sendData();
 };

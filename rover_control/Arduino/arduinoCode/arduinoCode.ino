@@ -57,6 +57,9 @@ Task imuTask(500, TASK_FOREVER, [](){ bno.callback(); }, &scheduler);
 Task loadCurrentTask(500, TASK_FOREVER, [](){ loadCurrent.callback(); }, &scheduler);
 Task panelInaTask(500, TASK_FOREVER, [](){ panelIna.callback(); }, &scheduler );
 
+Task loadCurrentPoll(10, TASK_FOREVER, [](){ loadCurrent.poll(); }, &scheduler);
+Task loadCurrentSend(200, TASK_FOREVER, [](){ loadCurrent.sendData(); }, &scheduler);
+
 void setup() {
   Serial.begin(115200);
   Serial.println("log info Arduino starting!");
@@ -90,11 +93,11 @@ void setup() {
   loadCurrent.init();
   panelIna.init();
 
-//  internalBmeTask.enable();
-//  externalBmeTask.enable();
-//  imuTask.enable();
-//  loadCurrentTask.enable();
-//  panelInaTask.enable();
+  internalBmeTask.enable();
+  externalBmeTask.enable();
+  imuTask.enable();
+  loadCurrentTask.enable();
+  panelInaTask.enable();
 
   // Delay some tasks so they do not run all on the same cycle
   externalBmeTask.delay(5);
@@ -184,7 +187,11 @@ void driveTaskCallback() {
     }
     interrupts();
 
-    // TODO increase imu and load current poll rate
+    // TODO increase imu poll rate
+    loadCurrentTask.disable();
+    loadCurrentPoll.enable();
+    loadCurrentSend.enable();
+    
   } else {
     if (loadCurrent.current > 250) {
       driveTask.disable();
@@ -219,7 +226,11 @@ void stopMotors() {
 
 void onDriveEnd() {
   stopMotors();
-  // TODO Reset imu and load current sensor tasks
+  
+  // TODO Reset imu tasks
+  loadCurrentTask.enable();
+  loadCurrentPoll.disable();
+  loadCurrentSend.disable();
 }
 
 void moveDistanceCommand(int16_t dist, uint16_t spd, int16_t angle) {
@@ -259,8 +270,6 @@ void moveDistanceCommand(int16_t dist, uint16_t spd, int16_t angle) {
   Serial.println("clicks:");
   Serial.println(targetLeftClicks);
   Serial.println(targetRightClicks);
-
-//  driveTask.enable();
 }
 
 void eStopCommand() {

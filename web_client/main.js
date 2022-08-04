@@ -4,7 +4,8 @@ import {initLogger, log} from "./modules/logger.js";
 import {USE_WSS} from "./modules/config.js";
 import {updateOrientation, updatePosition} from "./modules/ui.js";
 
-let socket;
+let msg_socket;
+let stream_socket;
 let authenticated = false;
 
 async function onConnect(ev) {
@@ -85,15 +86,15 @@ async function onDisconnect(ev) {
 
 async function onError(ev) {
     log("Socket encountered an error", "error");
-    socket.close();
+    msg_socket.close();
 }
 
 function connect() {
-    socket = new WebSocket(`${USE_WSS ? 'wss' : 'ws'}://${config.WS_ADDRESS}:${config.WS_PORT}/driver`);
-    socket.onopen = onConnect;
-    socket.onmessage = onMessage;
-    socket.onclose = onDisconnect;
-    socket.onerror = onError;
+    msg_socket = new WebSocket(`${USE_WSS ? 'wss' : 'ws'}://${config.WS_ADDRESS}:${config.WS_MSG_PORT}/driver`);
+    msg_socket.onopen = onConnect;
+    msg_socket.onmessage = onMessage;
+    msg_socket.onclose = onDisconnect;
+    msg_socket.onerror = onError;
 }
 
 function onPageLoad() {
@@ -108,14 +109,14 @@ function onPageLoad() {
 }
 
 function sendMessage(msg) {
-    if (socket.readyState !== WebSocket.OPEN) {
+    if (msg_socket.readyState !== WebSocket.OPEN) {
         log("Failed to send message because socket is closed", "error");
         return;
     }
 
     log("Sending: " + msg, "debug");
 
-    socket.send(msg);
+    msg_socket.send(msg);
 }
 
 function sendObject(obj) {
@@ -153,6 +154,7 @@ function eStopCallback() {
 function handleAuthResponse(success, user) {
     if (success) {
         log("Authentication successful", "info");
+        connectToStream();
     } else {
         log("Authentication failed", "info");
     }
@@ -177,6 +179,7 @@ function handleCommandStatus(command) {
 }
 
 function handleOptionResponse(values) {
+    //TODO
 }
 
 function handleSensorData(time, sensor, meas) {
@@ -184,20 +187,66 @@ function handleSensorData(time, sensor, meas) {
 
     switch (sensor) {
         case "gps":
-            updatePosition(meas.getOrError(lat), meas.getOrError(meas.lon));
+            updatePosition(meas.getOrError("lat"), meas.getOrError("lon"));
             break;
 
         case "imu":
             updateOrientation(meas.getOrError("roll"), meas.getOrError("pitch"), meas.getOrError("yaw"));
+            document.getElementById("imutemp").innerText = meas.getOrError("temp") + "°C";
+            break;
+
+        case "external_bme":
+            document.getElementById("exttemp").innerText = meas.getOrError("temp") + "°C";
+            document.getElementById("exthumidity").innerText = meas.getOrError("humidity") + "%";
+            document.getElementById("extpressure").innerText = meas.getOrError("pressure") / 100 + "hPa";
+            break;
+
+        case "internal_bme":
+            document.getElementById("enclosuretemp").innerText = meas.getOrError("temp") + "°C";
+            break;
+
+        case "panel_power":
+            document.getElementById("batvoltage").innerText = meas.getOrError("voltage") + "V";
+            document.getElementById("panelcurrent").innerText = meas.getOrError("current") + "A";
+            break;
+
+        case "load_current":
+            document.getElementById("loadcurrent").innerText = meas.getOrError("current") + "A";
             break;
     }
 }
 
 function handleQueryBaseResponse(query, value) {
+    // TODO
+    log("Base station responded to query " + toString(query) + "with value " + toString(value), "info")
+}
+
+function connectToStream() {
+    stream_socket = new WebSocket(`${USE_WSS ? 'wss' : 'ws'}://${config.WS_ADDRESS}:${config.WS_STREAM_PORT}`);
+
+    stream_socket.onopen = function (_ev) {
+        log("Connected to stream socket", "info");
+    }
+
+    stream_socket.onmessage = function (ev) {
+        ui.onFrame(ev.data);
+    }
+
+    stream_socket.onerror = function (_ev) {
+        log("Streaming socket encountered an error", "error");
+        stream_socket.close();
+    }
+
+    stream_socket.onclose = function (_ev) {
+        log("Streaming socket closed", "info");
+        setTimeout(function () {
+          connectToStream();
+        }, 5000)
+    }
 }
 
 window.addEventListener("DOMContentLoaded", onPageLoad, false);
 
 window.addEventListener("unload", function() {
-    socket.close();
+    msg_socket.close();
 }, false);

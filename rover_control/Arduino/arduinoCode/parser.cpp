@@ -53,6 +53,7 @@ void execute_command() {
   switch (command_buffer[0]) {
     case 'h': { // Heartbeat
       Serial.println("hb");
+      break;
     }
     case 'e': { // Echo
       // Return rest of buffer raw

@@ -2,6 +2,7 @@
 
 let consoleLines = [];
 
+let positionKnown = false;
 let roverPos;
 let attitude_indicator;
 let minimap;
@@ -160,7 +161,7 @@ export function initUi() {
 
     L.esri.basemapLayer('Imagery').addTo(minimap);
     L.control.scale().addTo(minimap);
-    minimap.dragging.disable();
+    minimap.dragging.enable();
     minimap.touchZoom.disable();
     minimap.doubleClickZoom.enable();
     minimap.scrollWheelZoom.enable();
@@ -177,8 +178,10 @@ export function initUi() {
 
     followRoverCheckbox.onchange = function (e) {
         if (followRoverCheckbox.checked) {
-            minimap.dragging.disable();
-            minimap.panTo(roverPos);
+            if (positionKnown) {
+                minimap.dragging.disable();
+                minimap.panTo(roverPos);
+            }
         } else {
             minimap.dragging.enable();
         }
@@ -189,7 +192,7 @@ export function initUi() {
         iconSize: [30, 30],
         iconAnchor: [15, 15]
     })
-    mapMarker = L.marker(L.LatLng(0, 0), {icon: markerIcon, rotationAngle: 180})
+    mapMarker = L.marker(L.LatLng(0, 0), {icon: markerIcon})
 
     let xmlhttp = new XMLHttpRequest();
     xmlhttp.onreadystatechange = function() {
@@ -206,7 +209,17 @@ export function initUi() {
 export function updatePosition(lat, lng) {
     roverPos = new L.LatLng(lat, lng)
     mapMarker.setLatLng(roverPos)
-    mapMarker.addTo(minimap)
+
+    if (!positionKnown) {
+        mapMarker.addTo(minimap);
+        minimap.setZoom(18);
+    }
+
+    if (document.getElementById("followrovercheckbox").checked || !positionKnown) {
+        minimap.panTo(roverPos)
+    }
+
+    positionKnown = true;
 
     document.getElementById("mapcaption").innerText = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
 }
@@ -215,4 +228,8 @@ export function updateOrientation(roll, pitch, yaw) {
     attitude_indicator.setRoll(roll);
     attitude_indicator.setPitch(pitch);
     mapMarker.setRotationAngle(yaw);
+}
+
+export function onFrame(raw_frame) {
+
 }
