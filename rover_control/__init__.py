@@ -138,7 +138,7 @@ class Sandshark:
                 while True:
                     try:
                         msg = (await self.serial_reader.readline()).decode()
-                        msg_type = msg.split(" ")[0]
+                        msg_type = msg.strip().split(" ")[0]
 
                         # Delegate to message handler
                         await arduino_handlers.get(msg_type, arduino_default)(self, msg)
@@ -162,8 +162,8 @@ class Sandshark:
             if self.serial_connected:
                 self.serial_writer.write(b"h\n")
                 await self.serial_writer.drain()
-                if time.time_ns() - self.lastHeartbeat > 1e9:
-                    await self.log("Arduino is not replying to heartbeats", "warning")
+            if time.time_ns() - self.lastHeartbeat > 1e9:
+                await self.log("Arduino is not replying to heartbeats", "warning")
             await asyncio.sleep(0.5)
 
     async def gps_main(self):

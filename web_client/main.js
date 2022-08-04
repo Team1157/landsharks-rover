@@ -198,7 +198,7 @@ function handleSensorData(time, sensor, meas) {
         case "external_bme":
             document.getElementById("exttemp").innerText = meas.getOrError("temp") + "°C";
             document.getElementById("exthumidity").innerText = meas.getOrError("humidity") + "%";
-            document.getElementById("extpressure").innerText = meas.getOrError("pressure") / 100 + "hPa";
+            document.getElementById("extpressure").innerText = (meas.getOrError("pressure") / 100).toFixed(0) + "hPa";
             break;
 
         case "internal_bme":
@@ -212,6 +212,10 @@ function handleSensorData(time, sensor, meas) {
 
         case "load_current":
             document.getElementById("loadcurrent").innerText = meas.getOrError("current") + "A";
+            break;
+
+        case "pi":
+            document.getElementById("pitemp").innerText = meas.getOrError("cpu_temp") + "°C";
             break;
     }
 }
