@@ -175,6 +175,9 @@ class Sandshark:
             print("Unable to turn on GPS!")
         print("Turned on GPS")
 
+        await asyncio.sleep(1)
+        print("Listening GPS")
+
         while True:
             try:
                 gps_reader, gps_writer = await serial_asyncio.open_serial_connection(
