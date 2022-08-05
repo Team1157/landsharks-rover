@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 rscam = "0.5.5"
 tungstenite = "0.17.3"
+clap = { version = "3.2.16", features = ["derive"] }
