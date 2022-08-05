@@ -13,6 +13,7 @@ import psutil
 import serial
 import serial_asyncio
 import pynmea2
+# import RPi.GPIO as GPIO
 from common import *
 
 
@@ -244,7 +245,7 @@ async def handle_command(self: Sandshark, msg: CommandMessage):
             self.serial_writer.write(b"x\n")
             await self.serial_writer.drain()
             if self.sck and self.sck.open:
-                await self.sck.send_msg(CommandEndedMessage(command=self.current_command), completed=False)
+                await self.sck.send_msg(CommandEndedMessage(command=self.current_command, completed=False))
         else:
             await self.log("Could not cancel current command because Arduino is not connected", "error")
     self.current_command = msg.command

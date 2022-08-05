@@ -150,6 +150,12 @@ function eStopCallback() {
     });
 }
 
+function panCameraCallback(pan, tilt) {
+    sendObject({
+        "type": "point_camera",
+    })
+}
+
 // Message Handlers
 function handleAuthResponse(success, user) {
     if (success) {

@@ -10,6 +10,7 @@ let mapMarker;
 
 let consoleMessageCallback;
 let driveMessageCallback;
+let panCameraCallback;
 let eStopCallback;
 
 function updateConsole() {
@@ -128,11 +129,20 @@ export function initUi() {
     }
 
     document.onkeydown = function (ev) {
-        if (ev.key === ' ') {
-            // Don't estop when typing a space in the console
-            if (!(ev.target.nodeName.toLowerCase() === "input" && ev.target.type.toLowerCase() === "text")) {
-                eStopCallback();
-            }
+        if (ev.target.nodeName.toLowerCase() === "input" && ev.target.type.toLowerCase() === "text") {
+            return;
+        }
+
+        switch (ev.key) {
+            case ' ':
+                // Don't estop when typing a space in the console
+                if (!(ev.target.nodeName.toLowerCase() === "input" && ev.target.type.toLowerCase() === "text")) {
+                    eStopCallback();
+                }
+                break;
+
+            case 'ArrowUp':
+
         }
     }
 
@@ -213,6 +223,7 @@ export function updatePosition(lat, lng) {
     if (!positionKnown) {
         mapMarker.addTo(minimap);
         minimap.setZoom(18);
+        minimap.dragging.disable();
     }
 
     if (document.getElementById("followrovercheckbox").checked || !positionKnown) {
@@ -231,5 +242,5 @@ export function updateOrientation(roll, pitch, yaw) {
 }
 
 export function onFrame(raw_frame) {
-
+    console.log(raw_frame);
 }

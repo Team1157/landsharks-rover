@@ -248,12 +248,12 @@ void moveDistanceCommand(int16_t dist, uint16_t spd, int16_t angle) {
     int32_t centerRadius = (int32_t)dist * 4068 / (71 * angle); // mm. 4068 / 71 is close to 180 / pi
     leftDistance = (centerRadius - 287) * angle * 22 / 1260; // left radius * angle / 180 * pi
     rightDistance = (centerRadius + 287) * angle * 22 / 1260;
-    Serial.println("center radius");
-    Serial.println(centerRadius);
-    
-    Serial.println("distances:");
-    Serial.println(leftDistance);
-    Serial.println(rightDistance);
+//    Serial.println("center radius");
+//    Serial.println(centerRadius);
+//    
+//    Serial.println("distances:");
+//    Serial.println(leftDistance);
+//    Serial.println(rightDistance);
   }
   targetLeftClicks = leftDistance * 19194 / 12275; // leftDistance / (152.4 mm * 2pi) * (1497.3 clicks per revolution)
   targetRightClicks = rightDistance * 19194 / 12275;
@@ -263,13 +263,15 @@ void moveDistanceCommand(int16_t dist, uint16_t spd, int16_t angle) {
   targetLeftVelocity = targetLeftClicks * 1000 / duration;
   targetRightVelocity = targetRightClicks * 1000 / duration;
 
-  Serial.println("velocity:");
-  Serial.println(targetLeftVelocity);
-  Serial.println(targetRightVelocity);
+//  Serial.println("velocity:");
+//  Serial.println(targetLeftVelocity);
+//  Serial.println(targetRightVelocity);
+//
+//  Serial.println("clicks:");
+//  Serial.println(targetLeftClicks);
+//  Serial.println(targetRightClicks);
 
-  Serial.println("clicks:");
-  Serial.println(targetLeftClicks);
-  Serial.println(targetRightClicks);
+  driveTask.enable();
 }
 
 void eStopCommand() {

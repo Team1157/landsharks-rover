@@ -124,7 +124,7 @@ tr, td {
   border-collapse: collapse;
 }
 
-.dpad > td:hover { background-color:#E2A490; }
+.dpad td:hover { background-color:#E2A490; }
 
 .center {
   position: relative;
