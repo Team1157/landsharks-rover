@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Camera Test</title>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        img {
+            display: block;
+            margin: 0 auto;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <img src="not loaded">
+    <script>
+        let sck = new WebSocket("ws://rover.team1157.org:11572/view");
+        let img = document.querySelector("img");
+        sck.addEventListener("message", function(e) {
+            let reader = new FileReader();
+            reader.readAsDataURL(e.data);
+            reader.onloadend = function() {
+                console.log("frame");
+                img.src = reader.result.replace("application/octet-stream", "image/jpg")
+            };
+        })
+    </script>
+</body>
+</html>
