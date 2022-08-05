@@ -5,16 +5,16 @@ viewers = set()
 
 
 async def serve(sck):
-    print(f"client connected: {sck.remote_address}")
+    print(f"client connected: {sck.remote_address} at path {sck.path}")
     match sck.path:
-        case "view":
+        case "/view":
             viewers.add(sck)
             print("connected as viewer")
             await asyncio.Future()
-        case "stream":
+        case "/stream":
             print("connected as streamer")
             async for msg in sck:
-                await websockets.broadcast(viewers, msg)
+                websockets.broadcast(viewers, msg)
     print(f"client disconnected: {sck.remote_address}")
 
 
