@@ -30,7 +30,7 @@ fn main() {
     let mut n = 0u32;
 
     'conn_loop: loop { // Endlessly try to connect
-        let (mut sck, _response) = match connect("ws://rover.team1157.org:11572") {
+        let (mut sck, _response) = match connect("ws://rover.team1157.org:11572/stream") {
             Ok(x) => x,
             Err(e) => { println!("failed to connect: {e}"); continue; }
         };
@@ -38,13 +38,14 @@ fn main() {
         loop { // Endlessly send frames
             println!("getting frame");
             let frame = cam.capture().expect("failed to get frame");
-            print!("frame {}: {:?}\r", n, frame.format);
-            assert_eq!(frame.format, b"MJPG"); // panic if can't get mjpg
+            let v = frame.to_vec();
+            println!("frame {}: {}, size {}", n, std::str::from_utf8(&frame.format).unwrap(), v.len());
+            assert_eq!(frame.format, *b"MJPG"); // panic if can't get mjpg
             n += 1;
-            match sck.write_message(Message::Binary(frame.to_vec())) {
+            match sck.write_message(Message::Binary(v)) {
                 Ok(_) => (),
                 Err(e) => match e {
-                    WsError::AlreadyClosed | WsError::ConnectionClosed => {
+                    WsError::AlreadyClosed | WsError::ConnectionClosed | WsError::Io(_) => {
                         println!("conn closed, reconnecting");
                         continue 'conn_loop;
                     },
