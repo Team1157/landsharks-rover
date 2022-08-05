@@ -1,6 +1,8 @@
 
 
 let consoleLines = [];
+let lastConsoleCommands = []
+let consoleCommandIndex = -1;
 
 let positionKnown = false;
 let roverPos;
@@ -132,44 +134,40 @@ export function initUi() {
         driveMessageCallback(-moveAmountNumber.value, moveSpeedNumber.value, rotateAmountNumber.value);
     }
 
-    document.onkeydown = function (ev) {
-        if (ev.target.nodeName.toLowerCase() === "input" && ev.target.type.toLowerCase() === "text") {
-            return;
-        }
-
-        switch (ev.key) {
-            case ' ':
-                eStopCallback();
-                break;
-
-            case 'ArrowUp':
-                pointCameraCallback(0, -10);
-                break;
-
-            case 'ArrowDown':
-                pointCameraCallback(0, 10);
-                break;
-
-            case 'ArrowLeft':
-                pointCameraCallback(-15, 0);
-                break;
-
-            case 'ArrowRight':
-                pointCameraCallback(15, 0);
-                break;
-        }
-    }
+    document.onkeydown = onKeyDown;
 
     // Setup console
     let consoleInput = document.getElementById("consoleinput").children.item(0);
-    consoleInput.onkeypress = function(e) {
-        let keyCode = e.which;
+    consoleInput.onkeydown = function(e) {
+        console.log(e.key)
 
-        if (keyCode === 13) {
-          // Enter pressed
-          writeToConsole("> " + this.value);
-          consoleMessageCallback(this.value);
-          this.value = '';
+        switch (e.key) {
+            case "Enter":
+                // Enter pressed
+                writeToConsole("> " + this.value);
+                lastConsoleCommands.unshift(this.value)
+                consoleMessageCallback(this.value);
+                this.value = '';
+                consoleCommandIndex = -1;
+                break;
+
+            case "ArrowUp":
+                if (consoleCommandIndex + 1 < lastConsoleCommands.length) {
+                    consoleCommandIndex++;
+                    this.value = lastConsoleCommands[consoleCommandIndex];
+                }
+                break;
+
+            case "ArrowDown":
+                if (consoleCommandIndex > -1) {
+                    consoleCommandIndex--;
+                    if (consoleCommandIndex === -1) {
+                        this.value = '';
+                    } else {
+                        this.value = lastConsoleCommands[consoleCommandIndex];
+                    }
+                }
+                break;
         }
     };
 
@@ -229,6 +227,34 @@ export function initUi() {
 
     attitude_indicator = $.flightIndicator('#attitude', 'attitude', {size: document.getElementById("attitude").clientWidth, showBox: false, img_directory: "libraries/flight_indicators_plugin/img/"});
 }
+
+function onKeyDown(ev) {
+        if (ev.target.nodeName.toLowerCase() === "input" && ev.target.type.toLowerCase() === "text") {
+            return;
+        }
+
+        switch (ev.key) {
+            case ' ':
+                eStopCallback();
+                break;
+
+            case 'ArrowUp':
+                pointCameraCallback(0, -10);
+                break;
+
+            case 'ArrowDown':
+                pointCameraCallback(0, 10);
+                break;
+
+            case 'ArrowLeft':
+                pointCameraCallback(-15, 0);
+                break;
+
+            case 'ArrowRight':
+                pointCameraCallback(15, 0);
+                break;
+        }
+    }
 
 export function updatePosition(lat, lng) {
     roverPos = new L.LatLng(lat, lng)
