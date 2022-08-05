@@ -295,6 +295,9 @@ async def handle_point_camera(self: Sandshark, msg: PointCameraMessage):
         self.camera_yaw = msg.yaw
         self.camera_pitch = msg.pitch
 
+    self.camera_yaw %= 360
+    self.camera_pitch = min(max(self.camera_pitch, 0), 100)
+
     if self.serial_connected:
         self.serial_writer.write(f"p{self.camera_yaw} {self.camera_pitch}".encode())
         await self.serial_writer.drain()

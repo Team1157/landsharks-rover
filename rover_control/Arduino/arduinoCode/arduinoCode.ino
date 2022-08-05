@@ -19,8 +19,8 @@ const byte ENC_INT_PINS[] = {62, 63, 64, 65, 66, 67}, //main triggers for the en
 // Drive motors
 const bool INVERT_MOTORS[] = { 0,  1,  0,  1,  0,  1}; // A 1 indicates a motor is inverted
 
-const int MOT_P_GAIN = 0;
-const int MOT_I_GAIN = 4000;
+const int32_t MOT_P_GAIN = 0;
+const int32_t MOT_I_GAIN = 4000;
 
 byte INDICES[] = {0, 1, 2, 3, 4, 5};
 
@@ -47,6 +47,8 @@ Scheduler scheduler;
 void driveTaskCallback();
 void onDriveEnd();
 void moveCameraTaskCallback();
+void panEncCallback();
+
 Task readSerialTask(20, TASK_FOREVER, &read_serial_task, &scheduler); 
 Task driveTask(20, TASK_FOREVER, &driveTaskCallback, &scheduler, false, nullptr, onDriveEnd);
 Task moveCameraTask(20, TASK_FOREVER, &moveCameraTaskCallback, &scheduler);
@@ -158,16 +160,22 @@ void updateMotorController(uint8_t index, int16_t setpoint) { // Target velocity
   motSetpoints[index] = constrain(motSetpoints[index], -999999999, 999999999);
 
   // Write setpoint to motor
-  digitalWrite(MOT_DIR_PINS[index], (motSetpoints[index] < 0) == INVERT_MOTORS[index]);
-  analogWrite(MOT_PWM_PINS[index], abs(motSetpoints[index]) / 3906250); // * 256 / 1000000000
+//  if (index == 3 || index == 2) {
+    digitalWrite(MOT_DIR_PINS[index], (motSetpoints[index] < 0) == INVERT_MOTORS[index]); 
+    analogWrite(MOT_PWM_PINS[index], abs(motSetpoints[index]) / 3906250); // * 256 / 1000000000
+//  }
 
-//  Serial.print(setpoint);
-//  Serial.print(" ");
-//  Serial.print(deltaCount * 1000 / deltaMillis);
-//  Serial.print(" ");
-//  Serial.print(err);
-//  Serial.print(" ");
-//  Serial.println(motSetpoints[index] / 3906250);
+//  if (index == 3) {
+//    Serial.print(setpoint);
+//    Serial.print(" ");
+//    Serial.print(deltaCount * 1000 / deltaMillis);
+//    Serial.print(" ");
+//    Serial.print(err);
+//    Serial.print(" ");
+//    Serial.print((motSetpoints[index] < 0) == INVERT_MOTORS[index]);
+//    Serial.print(" ");
+//    Serial.println(motSetpoints[index] / 3906250);
+//  }
 }
 
 void resetController(uint8_t index) {

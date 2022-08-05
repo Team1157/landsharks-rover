@@ -10,7 +10,7 @@ let mapMarker;
 
 let consoleMessageCallback;
 let driveMessageCallback;
-let panCameraCallback;
+let pointCameraCallback;
 let eStopCallback;
 
 function updateConsole() {
@@ -36,6 +36,10 @@ export function registerDriveCallback(callback) {
 
 export function registerEStopCallback(callback) {
     eStopCallback = callback;
+}
+
+export function registerPointCameraCallback(callback) {
+    pointCameraCallback = callback;
 }
 
 export function writeToConsole(message, level) {
@@ -135,14 +139,24 @@ export function initUi() {
 
         switch (ev.key) {
             case ' ':
-                // Don't estop when typing a space in the console
-                if (!(ev.target.nodeName.toLowerCase() === "input" && ev.target.type.toLowerCase() === "text")) {
-                    eStopCallback();
-                }
+                eStopCallback();
                 break;
 
             case 'ArrowUp':
+                pointCameraCallback(0, -10);
+                break;
 
+            case 'ArrowDown':
+                pointCameraCallback(0, 10);
+                break;
+
+            case 'ArrowLeft':
+                pointCameraCallback(-15, 0);
+                break;
+
+            case 'ArrowRight':
+                pointCameraCallback(15, 0);
+                break;
         }
     }
 

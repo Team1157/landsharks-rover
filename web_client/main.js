@@ -28,7 +28,6 @@ function getOrError(property) {
 
 async function onMessage(ev) {
     let raw_msg = ev.data;
-    log("Received: " + raw_msg, "debug");
 
     let msg
     try {
@@ -104,6 +103,7 @@ function onPageLoad() {
     ui.registerConsoleCallback(sendMessage);
     ui.registerDriveCallback(driveCommandCallback);
     ui.registerEStopCallback(eStopCallback);
+    ui.registerPointCameraCallback(pointCameraCallback);
 
     connect();
 }
@@ -150,9 +150,12 @@ function eStopCallback() {
     });
 }
 
-function panCameraCallback(pan, tilt) {
+function pointCameraCallback(pan, tilt) {
     sendObject({
         "type": "point_camera",
+        "yaw": pan,
+        "pitch": tilt,
+        "relative": true
     })
 }
 
