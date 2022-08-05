@@ -27,7 +27,7 @@ class Sandshark:
         self.serial_writer: t.Optional[asyncio.StreamWriter] = None
 
         self.camera_yaw = 0
-        self.camera_pitch = 0
+        self.camera_pitch = 90
 
         self.lastHeartbeat = time.time_ns()
 
