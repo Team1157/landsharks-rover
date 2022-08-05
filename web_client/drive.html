@@ -1,0 +1,143 @@
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>Rover Control</title>
+  <meta name="description" content="Rover Control Panel">
+
+  <link rel="stylesheet" href="stylesheet.css">
+
+  <link rel="stylesheet" type="text/css" href="libraries/flight_indicators_plugin/css/flightindicators.css" />
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="libraries/flight_indicators_plugin/js/jquery.flightindicators.js"></script>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+    integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+    crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+    integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+    crossorigin=""></script>
+  <script src="https://unpkg.com/esri-leaflet@2.5.0/dist/esri-leaflet.js"
+    integrity="sha512-ucw7Grpc+iEQZa711gcjgMBnmd9qju1CICsRaryvX7HJklK0pGl/prxKvtHwpgm5ZHdvAil7YPxI1oWPOWK3UQ=="
+    crossorigin=""></script>
+  <script src="libraries/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
+</head>
+
+<body>
+  <div id="wrapper">
+  <div id="sidebarleft">
+    <div id="status">
+      <h1>Status</h1>
+      <div id="instrumentscontainer">
+        <div id="instrumentscolumnleft">
+          <div id="mapid"></div>
+          <p id="mapcaption">No data</p>
+          <label><input id="followrovercheckbox" type="checkbox" checked>Follow rover</label>
+        </div>
+        <div id="instrumentscolumnright">
+          <span id="attitude"></span>
+        </div>
+      </div>
+      <div>
+        <table id="sensortable">
+          <tr>
+            <td>
+              <p>Ext. Temperature</p>
+              <p id="exttemp" class="sensorreadout">-</p>
+            </td>
+            <td>
+              <p>Ext. Humidity</p>
+              <p id="exthumidity" class="sensorreadout">-</p>
+            </td>
+            <td>
+              <p>Ext. Pressure</p>
+              <p id="extpressure" class="sensorreadout">-</p>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <p>Bat. Voltage</p>
+              <p id="batvoltage" class="sensorreadout">-</p>
+            </td>
+            <td><p>Panel Current</p>
+              <p id="panelcurrent" class="sensorreadout">-</p></td>
+            <td>
+              <p>Load Current</p>
+              <p id="loadcurrent" class="sensorreadout">-</p>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <p>Enclosure Temp.</p>
+              <p id="enclosuretemp" class="sensorreadout">-</p>
+            </td>
+            <td>
+              <p>Pi CPU Temp.</p>
+              <p id="pitemp" class="sensorreadout">-</p>
+            </td>
+            <td>
+              <p>Imu Temp.</p>
+              <p id="imutemp" class="sensorreadout">-</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div id="sidebarright">
+    <h1>Commands</h1>
+    <div class=slidercontainer>
+      <p>movement distance (m)</p>
+      <input type="range" min="0" max="10" value="1" step=".5" class="slider" id="moveAmountSlider">
+      <input type="number" min="0" max="10" step="any" class="numeric" id="moveAmountNumber">
+    </div>
+    <div class=slidercontainer>
+      <p>movement speed (m/s)</p>
+      <input type="range" min="0" max="1.5" value=".5" step=".05" class="slider" id="moveSpeedSlider">
+      <input type="number" min="0" max="1.5" step="any" class="numeric" id="moveSpeedNumber">
+    </div>
+    <div class=slidercontainer>
+      <p>rotation angle (°)</p>
+      <input type="range" min="0" max="180" value="15" step="5" class="slider" id="rotateAmountSlider">
+      <input type="number" min="0" max="180" step="any" class="numeric" id="rotateAmountNumber">
+    </div>
+    <div class="dpad">
+      <table>
+        <tr>
+          <td><img id="tul" src="images/arrow_turn.svg"></td>
+          <td><img id="tum" src="images/arrow_straight.svg"></td>
+          <td><img id="tur" src="images/arrow_turn.svg"></td>
+        </tr>
+        <tr>
+          <td><img id="tml" src="images/arrow_straight.svg"></td>
+          <td><img id="tmm" src="images/stop.png"></td>
+          <td><img id="tmr" src="images/arrow_straight.svg"></td>
+        </tr>
+        <tr>
+          <td><img id="tbl" src="images/arrow_turn.svg"></td>
+          <td><img id="tbm" src="images/arrow_straight.svg"></td>
+          <td><img id="tbr" src="images/arrow_turn.svg"></td>
+        </tr>
+      </table>
+    </div>
+  </div>
+  <div id="main">
+    <div class="center">
+      <div id="roverUI">
+        <img id="stream" src="images/camera%20placeholder.png">
+        <div id="console">
+          <div id="consolelines">
+          </div>
+          <div id="consoleprompt">></div>
+          <div id="consoleinput">
+            <input type="text">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="clear"></div>
+</div>
+<script src="main.js" type="module"></script>
+</body>
+</html>
