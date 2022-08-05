@@ -216,14 +216,23 @@ export function initUi() {
     })
     mapMarker = L.marker(L.LatLng(0, 0), {icon: markerIcon})
 
-    let xmlhttp = new XMLHttpRequest();
-    xmlhttp.onreadystatechange = function() {
+    let boundariesRequest = new XMLHttpRequest();
+    boundariesRequest.onreadystatechange = function() {
       if (this.readyState === 4 && this.status === 200) {
         L.geoJSON(JSON.parse(this.responseText), {style: {color: "#ff0000", fillOpacity: 0}}).addTo(minimap);
       }
     };
-    xmlhttp.open("GET", "assets/ohv_boundaries.geojson", true);
-    xmlhttp.send();
+    boundariesRequest.open("GET", "assets/ohv_boundaries.geojson", true);
+    boundariesRequest.send();
+
+    let routeRequest = new XMLHttpRequest();
+    routeRequest.onreadystatechange = function() {
+      if (this.readyState === 4 && this.status === 200) {
+        L.geoJSON(JSON.parse(this.responseText), {style: {color: "#0000ff", fillOpacity: 0}}).addTo(minimap);
+      }
+    };
+    routeRequest.open("GET", "assets/route.geojson", true);
+    routeRequest.send();
 
     attitude_indicator = $.flightIndicator('#attitude', 'attitude', {size: document.getElementById("attitude").clientWidth, showBox: false, img_directory: "libraries/flight_indicators_plugin/img/"});
 }
@@ -278,7 +287,7 @@ export function updatePosition(lat, lng) {
 export function updateOrientation(roll, pitch, yaw) {
     attitude_indicator.setRoll(roll);
     attitude_indicator.setPitch(pitch);
-    mapMarker.setRotationAngle(yaw);
+    mapMarker.setRotationAngle(-yaw);
 }
 
 export function onFrame(raw_frame) {

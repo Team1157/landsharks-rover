@@ -244,7 +244,6 @@ void onDriveEnd() {
 void moveDistanceCommand(int16_t dist, uint16_t spd, int16_t angle) {
   driveTask.disable();
 
-  angle = -angle;
   targetFinalAngle = angle;
 
   int32_t leftDistance;
