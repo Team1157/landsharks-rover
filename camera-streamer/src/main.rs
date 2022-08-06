@@ -1,6 +1,11 @@
+use std::error::Error;
+use std::io::Cursor;
 use std::path::PathBuf;
+use std::sync::Once;
 use tungstenite::{connect, Message, Error as WsError};
 use clap::Parser;
+use rscam::Frame;
+use image::io::Reader as ImageReader;
 
 #[derive(Parser, Debug)]
 #[clap()]
@@ -12,17 +17,26 @@ struct Args {
     framerate: Option<u32>,
 
     #[clap(short, long, value_parser, number_of_values=2)]
-    resolution: Option<Vec<u32>>
+    input_resolution: Option<Vec<u32>>,
+
+    #[clap(short, long, value_parser, number_of_values=2)]
+    output_resolution: Option<Vec<u32>>,
+
+    #[clap(short, long, value_parser)]
+    output_quality: Option<u8>
 }
 
+
 fn main() {
+    // Parse args
     let args: Args = Args::parse();
 
+    // get camera device, config and start
     let mut cam = rscam::new(args.device.to_str().unwrap()).expect("failed to get camera device");
 
     cam.start(&rscam::Config {
         interval: (1, args.framerate.unwrap_or(10)),
-        resolution: args.resolution.map(|v| (v[0], v[1])).unwrap_or((640, 480)),
+        resolution: args.input_resolution.map(|v| (v[0], v[1])).unwrap_or((640, 480)),
         format: b"MJPG",
         ..Default::default()
     }).expect("failed to init camera");
@@ -38,11 +52,19 @@ fn main() {
         loop { // Endlessly send frames
             println!("getting frame");
             let frame = cam.capture().expect("failed to get frame");
-            let v = frame.to_vec();
             println!("frame {}: {}, size {}", n, std::str::from_utf8(&frame.format).unwrap(), v.len());
             assert_eq!(frame.format, *b"MJPG"); // panic if can't get mjpg
             n += 1;
-            match sck.write_message(Message::Binary(v)) {
+            // reencode frame
+            let encoded_frame = match reencode_frame(
+                &frame,
+                args.output_resolution.map(|v| (v[0], v[1])).unwrap_or((256, 144)),
+                args.output_quality.unwrap_or(50)
+            ) {
+                Ok(f) => f,
+                Err(e) => { println!("Failed to reencode frame: {}", e); continue }
+            };
+            match sck.write_message(Message::Binary(encoded_frame)) {
                 Ok(_) => (),
                 Err(e) => match e {
                     WsError::AlreadyClosed | WsError::ConnectionClosed | WsError::Io(_) => {
@@ -54,4 +76,14 @@ fn main() {
             }
         }
     }
+}
+
+fn reencode_frame(frame: &Frame, size: (u32, u32), quality: u8) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut out = Vec::<u8>::new();
+    let img = ImageReader::new(Cursor::new(frame))
+        .with_guessed_format()?
+        .decode()?
+        .resize(size.0, size.1, image::imageops::FilterType::Lanczos3)?
+        .write_to(&mut out, image::ImageOutputFormat::Jpeg(quality));
+
 }
