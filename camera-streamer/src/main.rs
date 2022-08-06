@@ -21,7 +21,10 @@ struct Args {
     output_resolution: Option<Vec<u32>>,
 
     #[clap(short='q', long, value_parser)]
-    output_quality: Option<u8>
+    output_quality: Option<u8>,
+
+    #[clap(short, long)]
+    debug: bool
 }
 
 
@@ -31,6 +34,7 @@ fn main() {
     let input_res = args.input_resolution.map(|v| (v[0], v[1])).unwrap_or((640, 480));
     let output_res = args.output_resolution.map(|v| (v[0], v[1])).unwrap_or((256, 144));
     let output_qual = args.output_quality.unwrap_or(50);
+    let debug = args.debug;
 
     // get camera device, config and start
     let mut cam = rscam::new(args.device.to_str().unwrap()).expect("failed to get camera device");
@@ -51,9 +55,9 @@ fn main() {
         };
         println!("connected");
         loop { // Endlessly send frames
-            println!("getting frame");
+            if debug { println!("getting frame"); }
             let frame = cam.capture().expect("failed to get frame");
-            println!("frame {}: {}, size {}", n, std::str::from_utf8(&frame.format).unwrap(), frame.len());
+            if debug { println!("frame {}: {}, size {}", n, std::str::from_utf8(&frame.format).unwrap(), frame.len()); }
             assert_eq!(frame.format, *b"MJPG"); // panic if can't get mjpg
             n += 1;
             // reencode frame
@@ -65,6 +69,7 @@ fn main() {
                 Ok(f) => f,
                 Err(e) => { println!("Failed to reencode frame: {}", e); continue }
             };
+            if debug { println!("reencoded to size {}", encoded_frame.len()) }
             match sck.write_message(Message::Binary(encoded_frame)) {
                 Ok(_) => (),
                 Err(e) => match e {
