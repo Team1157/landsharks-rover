@@ -145,7 +145,7 @@ class Sandshark:
     async def serial_main(self):
         while True:
             try:
-                self.serial_reader, serial_writer = await serial_asyncio.open_serial_connection(
+                self.serial_reader, self.serial_writer = await serial_asyncio.open_serial_connection(
                     url="/dev/ttyACM0",
                     baudrate=115200
                 )
