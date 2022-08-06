@@ -16,6 +16,7 @@ let pointCameraCallback;
 let eStopCallback;
 
 let stream_reader;
+let stream_img;
 
 function updateConsole() {
     let consoleDiv = document.getElementById("consolelines");
@@ -238,7 +239,7 @@ export function initUi() {
 
     attitude_indicator = $.flightIndicator('#attitude', 'attitude', {size: document.getElementById("attitude").clientWidth, showBox: false, img_directory: "libraries/flight_indicators_plugin/img/"});
 
-    let stream_img = document.getElementById("stream");
+    stream_img = document.getElementById("stream");
     stream_reader = new FileReader();
 
     stream_reader.onloadend = function() {

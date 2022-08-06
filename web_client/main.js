@@ -88,7 +88,7 @@ async function onError(ev) {
 }
 
 function connect() {
-    msg_socket = new WebSocket(`${USE_WSS ? 'wss' : 'ws'}://${config.WS_ADDRESS}:${config.WS_MSG_PORT}/driver`);
+    msg_socket = new WebSocket(`${config.USE_WSS ? 'wss' : 'ws'}://${config.WS_ADDRESS}:${config.WS_MSG_PORT}/driver`);
     msg_socket.onopen = onConnect;
     msg_socket.onmessage = onMessage;
     msg_socket.onclose = onDisconnect;
@@ -234,7 +234,7 @@ function handleQueryBaseResponse(query, value) {
 }
 
 function connectToStream() {
-    stream_socket = new WebSocket(`${USE_WSS ? 'wss' : 'ws'}://${config.WS_ADDRESS}:${config.WS_STREAM_PORT}/view`);
+    stream_socket = new WebSocket(`ws://${config.WS_ADDRESS}:${config.WS_STREAM_PORT}/view`);
 
     stream_socket.onopen = function (_ev) {
         log("Connected to stream socket", "info");

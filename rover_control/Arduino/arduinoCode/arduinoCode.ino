@@ -201,12 +201,12 @@ void driveTaskCallback() {
     loadCurrentSend.enable();
     
   } else {
-    if (loadCurrent.current > 250) {
-      driveTask.disable();
-      Serial.println("interrupted");
-      Serial.println(F("log warning Cancelled command because load current exceeded 25A"));
-      return;
-    }
+//    if (loadCurrent.current > 250) {
+//      driveTask.disable();
+//      Serial.println("interrupted");
+//      Serial.println(F("log warning Cancelled command because load current exceeded 25A"));
+//      return;
+//    }
 
     if (millis() - getLastMessageMillis() > 1000) {
       driveTask.disable();

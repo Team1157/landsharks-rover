@@ -141,7 +141,9 @@ tr, td {
   padding-top: 45vh;
 }
 
-#stream { width: 100%; }
+#stream {
+  width: 100%;
+}
 
 
 #instrumentscolumnright, #instrumentscolumnleft {
