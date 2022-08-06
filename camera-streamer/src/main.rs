@@ -80,10 +80,10 @@ fn main() {
 
 fn reencode_frame(frame: &Frame, size: (u32, u32), quality: u8) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut out = Vec::<u8>::new();
-    let img = ImageReader::new(Cursor::new(frame))
+    ImageReader::new(Cursor::new(frame))
         .with_guessed_format()?
         .decode()?
         .resize(size.0, size.1, image::imageops::FilterType::Lanczos3)?
         .write_to(&mut out, image::ImageOutputFormat::Jpeg(quality));
-
+    Ok(out)
 }
