@@ -142,7 +142,6 @@ export function initUi() {
     // Setup console
     let consoleInput = document.getElementById("consoleinput").children.item(0);
     consoleInput.onkeydown = function(e) {
-        console.log(e.key)
 
         switch (e.key) {
             case "Enter":

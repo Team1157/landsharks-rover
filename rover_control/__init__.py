@@ -145,7 +145,7 @@ class Sandshark:
     async def serial_main(self):
         while True:
             try:
-                self.serial_reader, self.serial_writer = await serial_asyncio.open_serial_connection(
+                self.serial_reader, serial_writer = await serial_asyncio.open_serial_connection(
                     url="/dev/ttyACM0",
                     baudrate=115200
                 )
@@ -174,6 +174,9 @@ class Sandshark:
                 continue
 
     async def serial_heartbeat(self):
+        await asyncio.sleep(5)
+        self.lastHeartbeat = time.time_ns()
+
         while True:
             if self.serial_connected:
                 self.serial_writer.write(b"h\n")
