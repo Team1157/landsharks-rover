@@ -81,7 +81,7 @@ fn main() {
                 Message::Binary(encoded_frame)
             }
             else {
-                Message::Binary(frame.as_vec())
+                Message::Binary(frame.to_vec())
             };
             match sck.write_message(msg) {
                 Ok(_) => (),
