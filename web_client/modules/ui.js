@@ -15,6 +15,8 @@ let driveMessageCallback;
 let pointCameraCallback;
 let eStopCallback;
 
+let stream_reader;
+
 function updateConsole() {
     let consoleDiv = document.getElementById("consolelines");
     while (consoleDiv.firstChild) {
@@ -235,6 +237,13 @@ export function initUi() {
     routeRequest.send();
 
     attitude_indicator = $.flightIndicator('#attitude', 'attitude', {size: document.getElementById("attitude").clientWidth, showBox: false, img_directory: "libraries/flight_indicators_plugin/img/"});
+
+    let stream_img = document.getElementById("stream");
+    stream_reader = new FileReader();
+
+    stream_reader.onloadend = function() {
+        stream_img.src = stream_reader.result.replace("application/octet-stream", "image/jpg")
+    };
 }
 
 function onKeyDown(ev) {
@@ -256,11 +265,11 @@ function onKeyDown(ev) {
                 break;
 
             case 'ArrowLeft':
-                pointCameraCallback(-15, 0);
+                pointCameraCallback(15, 0);
                 break;
 
             case 'ArrowRight':
-                pointCameraCallback(15, 0);
+                pointCameraCallback(-15, 0);
                 break;
         }
     }
@@ -291,5 +300,5 @@ export function updateOrientation(roll, pitch, yaw) {
 }
 
 export function onFrame(raw_frame) {
-    console.log(raw_frame);
+    stream_reader.readAsDataURL(raw_frame);
 }

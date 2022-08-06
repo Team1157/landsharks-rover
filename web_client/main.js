@@ -1,7 +1,6 @@
 import * as config from "./modules/config.js";
 import * as ui from "./modules/ui.js"
 import {initLogger, log} from "./modules/logger.js";
-import {USE_WSS} from "./modules/config.js";
 import {updateOrientation, updatePosition} from "./modules/ui.js";
 
 let msg_socket;
@@ -183,12 +182,12 @@ function handleCommandEnded(command, completed) {
     }
 }
 
-function handleCommandStatus(command) {
+function handleCommandStatus(_command) {
     log("Command running", "info");
 }
 
 function handleOptionResponse(values) {
-    //TODO
+    log("Options set: " + toString(values))
 }
 
 function handleSensorData(time, sensor, meas) {
@@ -235,7 +234,7 @@ function handleQueryBaseResponse(query, value) {
 }
 
 function connectToStream() {
-    stream_socket = new WebSocket(`${USE_WSS ? 'wss' : 'ws'}://${config.WS_ADDRESS}:${config.WS_STREAM_PORT}`);
+    stream_socket = new WebSocket(`${USE_WSS ? 'wss' : 'ws'}://${config.WS_ADDRESS}:${config.WS_STREAM_PORT}/view`);
 
     stream_socket.onopen = function (_ev) {
         log("Connected to stream socket", "info");

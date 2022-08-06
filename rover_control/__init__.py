@@ -1,7 +1,9 @@
 import asyncio
+import enum
 import json
 import os
 import pathlib
+import subprocess
 import time
 import typing as t
 import traceback
@@ -16,6 +18,13 @@ import pynmea2
 # import RPi.GPIO as GPIO
 from common import *
 
+# IR_PIN = 17
+
+
+class CameraSource(enum.Enum):
+    PRETTICAM = "/dev/video0"
+    NAVICAM = "/dev/video1"
+
 
 class Sandshark:
     def __init__(self):
@@ -25,16 +34,23 @@ class Sandshark:
         self.serial_connected: bool = False
         self.serial_reader: t.Optional[asyncio.StreamReader] = None
         self.serial_writer: t.Optional[asyncio.StreamWriter] = None
+        self.stream_subprocess = None
 
         self.camera_yaw = 0
         self.camera_pitch = 90
 
         self.lastHeartbeat = time.time_ns()
 
-        self.options = {  # TODO
-            "navicam.enabled": False,
-            "prettycam.enabled": False
+        self.options = {
+            "camera.source": None,
+            "camera.resolution": (256, 144),
+            "camera.framerate": 10,
         }
+
+        self.module_path = pathlib.Path(os.path.dirname(__file__))
+
+        # GPIO.setmode(GPIO.BOARD)
+        # GPIO.setup(IR_PIN, GPIO.OUT)
 
     async def log(self, msg: str, level: str = "info"):
         """Logs a message to the base station if connected"""
@@ -76,8 +92,7 @@ class Sandshark:
         # Start serial heartbeat
         asyncio.create_task(self.serial_heartbeat())
 
-        module_path = pathlib.Path(os.path.dirname(__file__))
-        with open(module_path / "secrets.json") as secrets_file:
+        with open(self.module_path / "secrets.json") as secrets_file:
             token = json.load(secrets_file)["token"]
 
         async for self.sck in websockets.connect("wss://rover.team1157.org:11571/rover", ping_interval=5, ping_timeout=10):
@@ -163,7 +178,7 @@ class Sandshark:
             if self.serial_connected:
                 self.serial_writer.write(b"h\n")
                 await self.serial_writer.drain()
-            if time.time_ns() - self.lastHeartbeat > 1e9:
+            if time.time_ns() - self.lastHeartbeat > 5e9:
                 await self.log("Arduino is not replying to heartbeats", "warning")
             await asyncio.sleep(0.5)
 
@@ -228,6 +243,17 @@ class Sandshark:
                 await asyncio.sleep(5)
                 continue
 
+    def start_stream(self, device: str, width: int, height: int, framerate: int):
+        if self.stream_subprocess is not None:
+            self.stop_stream()
+
+        script_path = self.module_path.parent / "camera-streamer" / "src" / "target" / "debug" / "camera-streamer"
+        self.stream_subprocess = subprocess.Popen([script_path, device, "--resolution", width, height, "--framerate", framerate])
+
+    def stop_stream(self):
+        self.stream_subprocess.terminate()
+        self.stream_subprocess = None
+
 
 message_handlers = {}
 
@@ -262,7 +288,48 @@ async def handle_command(self: Sandshark, msg: CommandMessage):
 @message_handler(OptionMessage)
 async def handle_option(self: Sandshark, msg: OptionMessage):
     # Set values
-    self.options.update(msg.set)
+    old_options = self.options.copy()
+
+    if "camera.source" in msg.set.keys:
+        source_raw = msg.set.keys["camera.source"]
+
+        if source_raw is None:
+            self.options["camera.source"] = None
+        else:
+            if type(source_raw) is not str:
+                await self.log("Option camera.source must be a string or null", "error")
+                return
+
+            if source_raw.lower() in ("p", "pretticam", "prettycam"):
+                self.options["camera.source"] = CameraSource.PRETTICAM
+            elif source_raw.lower() in ("n", "navicam", "navcam"):
+                self.options["camera.source"] = CameraSource.NAVICAM
+            else:
+                await self.log(f"Unknown camera.source: {source_raw}", "error")
+
+    if "camera.resolution" in msg.set.keys:
+        resolution_raw = msg.set.keys["camera.resolution"]
+        if type(resolution_raw) is not list or len(resolution_raw) != 2 or type(resolution_raw[0]) is not int or type(resolution_raw[1]) is not int:
+            await self.log("Option camera.resolution must be an array of two integers", "error")
+            return
+
+        self.options["camera.resolution"] = tuple(resolution_raw)
+
+    if "camera.framerate" in msg.set.keys:
+        framerate_raw = msg.set.keys["camera.framerate"]
+        if type(framerate_raw) is not int:
+            await self.log("Option camera.framerate must be an int", "error")
+            return
+
+        self.options["camera.framerate"] = framerate_raw
+
+    if any([self.options[k] != old_options[k] for k in self.options.keys()]):
+        self.start_stream(
+            self.options["camera.source"].value if self.options["camera.source"] is not None else None,
+            self.options["camera.resolution"][0],
+            self.options["camera.resolution"][1],
+            self.options["camera.framerate"]
+        )
 
     # Get values
     if self.sck and self.sck.open:
@@ -416,4 +483,4 @@ async def arduino_data(self: Sandshark, msg: str):
 
 async def arduino_default(self: Sandshark, msg: str):
     if self.sck and self.sck.open:
-        self.sck.send_msg(LogMessage(message=f"Received unexpected message from Arduino: {msg}", level="error"))
+        await self.sck.send_msg(LogMessage(message=f"Received unexpected message from Arduino: {msg}", level="error"))

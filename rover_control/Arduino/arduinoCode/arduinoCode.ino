@@ -5,9 +5,9 @@
 #include "parser.h"
 #include "sensors.h"
 
-#define PAN_PWM_PIN 2
+#define PAN_PWM_PIN 12
 #define PAN_ENCODER_PIN 3
-#define TILT_PWM_PIN 12
+#define TILT_PWM_PIN 2
 #define PANEL_CURRENT_PIN A0
 
 const byte ENC_INT_PINS[] = {62, 63, 64, 65, 66, 67}, //main triggers for the encoder interrupts
