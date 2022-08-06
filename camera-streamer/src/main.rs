@@ -23,7 +23,7 @@ struct Args {
     #[clap(short='q', long, value_parser)]
     output_quality: Option<u8>,
 
-    #[clap(short='e', long, default=true)]
+    #[clap(short='e', long)]
     reencode: bool,
 
     #[clap(short, long)]
