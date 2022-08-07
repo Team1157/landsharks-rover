@@ -250,7 +250,7 @@ class Sandshark:
         if self.stream_subprocess is not None:
             self.stop_stream()
 
-        script_path = self.module_path.parent / "camera-streamer" / "src" / "target" / "debug" / "camera-streamer"
+        script_path = self.module_path.parent / "camera-streamer" / "target" / "debug" / "camera-streamer"
         self.stream_subprocess = subprocess.Popen([script_path, device, "--resolution", str(width), str(height), "--framerate", str(framerate)])
 
     def stop_stream(self):
