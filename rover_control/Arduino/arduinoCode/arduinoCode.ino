@@ -13,7 +13,7 @@
 #define DEBUG
 #ifdef DEBUG
 #define DBG(x) { \
-  Serial.print("log debug " ## #x ## " = "); \
+  Serial.print("log debug " #x " = "); \
   Serial.println(x); \
 }
 #else
