@@ -251,7 +251,7 @@ class Sandshark:
             self.stop_stream()
 
         script_path = self.module_path.parent / "camera-streamer" / "src" / "target" / "debug" / "camera-streamer"
-        self.stream_subprocess = subprocess.Popen([script_path, device, "--resolution", str(width), str(height), "--framerate", framerate])
+        self.stream_subprocess = subprocess.Popen([script_path, device, "--resolution", str(width), str(height), "--framerate", str(framerate)])
 
     def stop_stream(self):
         self.stream_subprocess.terminate()
