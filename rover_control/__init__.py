@@ -294,7 +294,7 @@ async def handle_option(self: Sandshark, msg: OptionMessage):
     old_options = self.options.copy()
 
     if "camera.source" in msg.set.keys():
-        source_raw = msg.set.keys()["camera.source"]
+        source_raw = msg.set.keys["camera.source"]
 
         if source_raw is None:
             self.options["camera.source"] = None
@@ -311,7 +311,7 @@ async def handle_option(self: Sandshark, msg: OptionMessage):
                 await self.log(f"Unknown camera.source: {source_raw}", "error")
 
     if "camera.resolution" in msg.set.keys():
-        resolution_raw = msg.set.keys()["camera.resolution"]
+        resolution_raw = msg.set["camera.resolution"]
         if type(resolution_raw) is not list or len(resolution_raw) != 2 or type(resolution_raw[0]) is not int or type(resolution_raw[1]) is not int:
             await self.log("Option camera.resolution must be an array of two integers", "error")
             return
@@ -319,7 +319,7 @@ async def handle_option(self: Sandshark, msg: OptionMessage):
         self.options["camera.resolution"] = tuple(resolution_raw)
 
     if "camera.framerate" in msg.set.keys():
-        framerate_raw = msg.set.keys()["camera.framerate"]
+        framerate_raw = msg.set["camera.framerate"]
         if type(framerate_raw) is not int:
             await self.log("Option camera.framerate must be an int", "error")
             return
