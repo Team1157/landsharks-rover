@@ -294,7 +294,7 @@ async def handle_option(self: Sandshark, msg: OptionMessage):
     old_options = self.options.copy()
 
     if "camera.source" in msg.set.keys():
-        source_raw = msg.set.keys["camera.source"]
+        source_raw = msg.set["camera.source"]
 
         if source_raw is None:
             self.options["camera.source"] = None
