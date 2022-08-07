@@ -27,7 +27,10 @@ struct Args {
     reencode: bool,
 
     #[clap(short, long)]
-    debug: bool
+    debug: bool,
+
+    #[clap(short, long, value_parser)]
+    skip: Option<u16>
 }
 
 
@@ -39,6 +42,7 @@ fn main() {
     let output_qual = args.output_quality.unwrap_or(50);
     let debug = args.debug;
     let reencode = args.reencode;
+    let skip = args.skip.unwrap_or(0);
 
     // get camera device, config and start
     let mut cam = rscam::new(args.device.to_str().unwrap()).expect("failed to get camera device");
@@ -60,7 +64,10 @@ fn main() {
         println!("connected");
         loop { // Endlessly send frames
             if debug { println!("getting frame"); }
-            let frame = cam.capture().expect("failed to get frame");
+            let frame= cam.capture().expect("failed to get frame");
+            for _ in 0..skip {
+                cam.capture().expect("failed to get frame");
+            }
             if debug { println!("frame {}: {}, size {}", n, std::str::from_utf8(&frame.format).unwrap(), frame.len()); }
             assert_eq!(frame.format, *b"MJPG"); // panic if can't get mjpg
             n += 1;
