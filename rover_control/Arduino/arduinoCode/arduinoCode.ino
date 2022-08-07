@@ -10,6 +10,16 @@
 #define TILT_PWM_PIN 2
 #define PANEL_CURRENT_PIN A0
 
+#define DEBUG
+#ifdef DEBUG
+#define DBG(x) { \
+  Serial.print("log debug " ## #x ## " = "); \
+  Serial.println(x); \
+}
+#else
+#define DBG(x) {}
+#endif
+
 const byte ENC_INT_PINS[] = {62, 63, 64, 65, 66, 67}, //main triggers for the encoder interrupts
            ENC_DIR_PINS[] = {22, 23, 24, 25, 26, 27}, //secondary encoder pins for finding direction
            MOT_PWM_PINS[] = { 4,  7,  9,  8, 10, 11}, //pwm outputs for motors
@@ -253,8 +263,11 @@ void moveDistanceCommand(int16_t dist, uint16_t spd, int16_t angle) {
     rightDistance = dist;
   } else {
     int32_t centerRadius = (int32_t)dist * 4068 / (71 * angle); // mm. 4068 / 71 is close to 180 / pi
+    DBG(centerRadius);
     leftDistance = (centerRadius - 287) * angle * 22 / 1260; // left radius * angle / 180 * pi
+    DBG(leftDistance);
     rightDistance = (centerRadius + 287) * angle * 22 / 1260;
+    DBG(rightDistance);
 //    Serial.println("center radius");
 //    Serial.println(centerRadius);
 //    
@@ -263,12 +276,17 @@ void moveDistanceCommand(int16_t dist, uint16_t spd, int16_t angle) {
 //    Serial.println(rightDistance);
   }
   targetLeftClicks = leftDistance * 19194 / 12275; // leftDistance / (152.4 mm * 2pi) * (1497.3 clicks per revolution)
+  DBG(leftTargetClicks);
   targetRightClicks = rightDistance * 19194 / 12275;
+  DBG(rightTargetClicks);
 
   int32_t duration = (abs(leftDistance) + abs(rightDistance)) * 500 / spd; // in ms
+  DBG(duration);
 
   targetLeftVelocity = targetLeftClicks * 1000 / duration;
+  DBG(targetLeftVelocity);
   targetRightVelocity = targetRightClicks * 1000 / duration;
+  DBG(targetRightVelocity);
 
 //  Serial.println("velocity:");
 //  Serial.println(targetLeftVelocity);
