@@ -276,9 +276,9 @@ void moveDistanceCommand(int16_t dist, uint16_t spd, int16_t angle) {
 //    Serial.println(rightDistance);
   }
   targetLeftClicks = leftDistance * 19194 / 12275; // leftDistance / (152.4 mm * 2pi) * (1497.3 clicks per revolution)
-  DBG(leftTargetClicks);
+  DBG(targetLeftClicks);
   targetRightClicks = rightDistance * 19194 / 12275;
-  DBG(rightTargetClicks);
+  DBG(targetRightClicks);
 
   int32_t duration = (abs(leftDistance) + abs(rightDistance)) * 500 / spd; // in ms
   DBG(duration);
